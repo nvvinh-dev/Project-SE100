@@ -1,0 +1,23 @@
+# PostgreSQL cho môi trường phát triển trên máy. Mật khẩu đọc từ file .env (không commit), xem .env.example.
+services:
+  db:
+    image: postgres:17
+    container_name: householdfarm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: householdfarm
+      POSTGRES_USER: householdfarm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Chưa khai báo POSTGRES_PASSWORD trong file .env}
+    ports:
+      # Chỉ mở cho máy mình; đổi POSTGRES_PORT trong .env nếu cổng 5432 đã bị dùng.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U householdfarm -d householdfarm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

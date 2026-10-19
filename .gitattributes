@@ -1,0 +1,3 @@
+# Chuẩn hóa xuống dòng khi commit; script shell luôn giữ LF để chạy được trên Linux và CI.
+* text=auto
+*.sh text eol=lf
