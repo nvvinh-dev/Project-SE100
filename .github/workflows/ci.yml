@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # Chạy cho mọi PR, kể cả PR có base là nhánh khác main (PR nối tiếp nhau).
   pull_request:
-    branches: [main]
   push:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   backend:

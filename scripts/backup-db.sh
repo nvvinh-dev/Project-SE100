@@ -26,5 +26,12 @@ if ! docker run --rm -e DB_URL postgres:17 \
   exit 1
 fi
 
-echo "Đã sao lưu vào $backup_file"
-echo "Khôi phục: pg_restore --no-owner --no-privileges --dbname=<chuỗi kết nối đích> $backup_file"
+# Lệnh khôi phục cũng chạy qua image postgres:17 để máy không cần cài PostgreSQL.
+cat <<EOF
+Đã sao lưu vào $backup_file
+
+Khôi phục vào một database trống: đặt DB_URL là chuỗi kết nối của database đích, rồi chạy
+  docker run --rm -i -e DB_URL postgres:17 sh -c 'pg_restore --no-owner --no-privileges --dbname="\$DB_URL"' < $backup_file
+Database đích chạy trên chính máy này thì dùng host host.docker.internal thay cho localhost.
+Lỗi 'schema "public" already exists' khi khôi phục là vô hại: database đích đã có sẵn schema public.
+EOF
