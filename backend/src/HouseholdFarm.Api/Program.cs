@@ -1,3 +1,6 @@
+using HouseholdFarm.Api.Features.Reports.Finance;
+using HouseholdFarm.Api.Features.Sales;
+using HouseholdFarm.Api.Features.Supplies;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +17,11 @@ builder.Services.AddSerilog((services, logger) => logger
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+
+// Điểm nối giữa các module: scoped để bên gọi và bên được gọi dùng chung một AppDbContext, một giao dịch database.
+builder.Services.AddScoped<IStockService, StockService>();
+builder.Services.AddScoped<ISaleHarvestLinkService, SaleHarvestLinkService>();
+builder.Services.AddScoped<ISeasonFinanceService, SeasonFinanceService>();
 
 var app = builder.Build();
 
