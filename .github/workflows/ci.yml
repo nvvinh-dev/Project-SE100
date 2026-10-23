@@ -1,10 +1,10 @@
 name: CI
 
 on:
-  # Chạy cho mọi PR, kể cả PR có base là nhánh khác main (PR nối tiếp nhau).
+  # Chạy cho mọi PR, kể cả PR nối tiếp nhau có base là nhánh của PR khác.
   pull_request:
   push:
-    branches: [main]
+    branches: [develop, main]
 
 permissions:
   contents: read
