@@ -64,6 +64,13 @@ dotnet_naming_rule.members_should_be_pascal_case.style = pascal_case_style
 dotnet_naming_symbols.member_symbols.applicable_kinds = method, property, event
 dotnet_naming_style.pascal_case_style.capitalization = pascal_case
 
+# Đặt tên: hằng số PascalCase, kể cả hằng private (quy tắc có const cụ thể hơn nên được ưu tiên hơn quy tắc trường private)
+dotnet_naming_rule.constants_should_be_pascal_case.severity = warning
+dotnet_naming_rule.constants_should_be_pascal_case.symbols = constant_symbols
+dotnet_naming_rule.constants_should_be_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constant_symbols.applicable_kinds = field
+dotnet_naming_symbols.constant_symbols.required_modifiers = const
+
 # Đặt tên: trường private dạng _camelCase
 dotnet_naming_rule.private_fields_should_be_underscore_camel.severity = warning
 dotnet_naming_rule.private_fields_should_be_underscore_camel.symbols = private_field_symbols
