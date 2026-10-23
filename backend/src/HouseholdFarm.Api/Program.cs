@@ -1,6 +1,11 @@
+using HouseholdFarm.Api.Common.Auth;
+using HouseholdFarm.Api.Common.Persistence;
+using HouseholdFarm.Api.Common.Time;
+using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Sales;
 using HouseholdFarm.Api.Features.Supplies;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +22,20 @@ builder.Services.AddSerilog((services, logger) => logger
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<IAppClock, AppClock>();
+
+// Lớp tạm cho tới FR-AUTH-02, khi người dùng hiện tại được nạp từ database mỗi yêu cầu.
+builder.Services.AddScoped<ICurrentUser, AnonymousCurrentUser>();
+
+// Chuỗi kết nối đọc lúc tạo DbContext, không đọc lúc khởi động, để test thay được bằng database của Testcontainers.
+// Không bật EnableRetryOnFailure: cơ chế tự thử lại không chạy được với giao dịch database mở bằng tay.
+builder.Services.AddScoped<CommonColumnsInterceptor>();
+builder.Services.AddDbContext<AppDbContext>((services, options) => options
+    .UseNpgsql(services.GetRequiredService<IConfiguration>().GetConnectionString("Default"))
+    .UseSnakeCaseNamingConvention()
+    .AddInterceptors(services.GetRequiredService<CommonColumnsInterceptor>()));
 
 // Điểm nối giữa các module: scoped để bên gọi và bên được gọi dùng chung một AppDbContext, một giao dịch database.
 builder.Services.AddScoped<IStockService, StockService>();
