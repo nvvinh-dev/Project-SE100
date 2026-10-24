@@ -1,3 +1,5 @@
+using HouseholdFarm.Api.Domain.Enums;
+
 namespace HouseholdFarm.Api.Features.Supplies;
 
 // Không có giá để bên gọi trả thẳng được cho Thành viên không có quyền Quản lý kho.
@@ -8,6 +10,7 @@ public record SupplyStockResponse(Guid SupplyId, decimal StockQuantity, decimal 
 public record StockTransactionResponse(
     Guid Id,
     Guid SupplyId,
+    StockTransactionType Type,
     Guid? SeasonId,
     DateOnly TransactionDate,
     decimal Quantity,

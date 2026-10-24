@@ -15,10 +15,12 @@ public interface ISaleHarvestLinkService
     /// <returns>Id các giao dịch bán vừa bị gỡ liên kết, để bên gọi đưa vào nhật ký của phiếu nếu cần.</returns>
     /// <remarks>
     /// Dùng giao dịch database của bên gọi nếu đã có, không mở giao dịch mới; chưa có thì tự mở và tự commit.
-    /// Tự gọi <c>SaveChangesAsync</c> nhưng chỉ commit khi chính nó mở giao dịch.
+    /// Tự gọi <c>SaveChangesAsync</c> nhưng chỉ commit khi chính nó mở giao dịch. <c>AppDbContext</c> dùng chung với bên gọi,
+    /// nên lần lưu này lưu luôn các thay đổi bên gọi đang giữ (ví dụ <c>HarvestRecord</c> vừa sửa);
+    /// <c>CONCURRENCY_CONFLICT</c> của các thay đổi đó có thể ném ra từ trong hàm này.
     /// Không kiểm tra quyền và không ghi nhật ký riêng: bên gọi đã kiểm tra quyền sửa, hủy phiếu thu hoạch
     /// và đã ghi nhật ký <c>HarvestRecord.Correct</c> hoặc <c>HarvestRecord.Void</c>.
-    /// Không ném lỗi nghiệp vụ.
+    /// Không ném lỗi nghiệp vụ của riêng nó.
     /// </remarks>
     Task<IReadOnlyList<Guid>> RemoveByHarvestRecordAsync(Guid harvestRecordId, CancellationToken ct);
 }

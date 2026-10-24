@@ -5,9 +5,23 @@ namespace HouseholdFarm.Api.Features.Supplies;
 /// công việc xuất kho từ vật tư đã dùng.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Hàm ghi dùng giao dịch database của bên gọi nếu đã có, không mở giao dịch mới; chưa có thì tự mở và tự commit.
 /// Hàm ghi tự gọi <c>SaveChangesAsync</c> để lần gọi sau trong cùng giao dịch tính đúng tồn,
-/// nhưng chỉ commit khi chính nó mở giao dịch.
+/// nhưng chỉ commit khi chính nó mở giao dịch. <c>AppDbContext</c> dùng chung với bên gọi, nên lần lưu này lưu luôn
+/// các thay đổi bên gọi đang giữ (ví dụ <c>FarmTask</c> vừa sửa); <c>CONCURRENCY_CONFLICT</c> của các thay đổi đó
+/// có thể ném ra từ trong hàm ghi.
+/// </para>
+/// <para>
+/// Hàm ghi tự khóa dòng <c>seasons</c> của mùa vụ rồi mới khóa dòng <c>supplies</c> của vật tư (BR-GEN-12),
+/// kể cả khi bên gọi đã khóa mùa vụ: khóa lại dòng mà giao dịch đang giữ thì không bị chặn.
+/// </para>
+/// <para>
+/// Một giao dịch ghi nhiều dòng vật tư thì sắp các dòng theo <c>supplyId</c> tăng dần; với mỗi vật tư gọi
+/// <see cref="VoidFarmTaskStockOutAsync"/> (nếu có giao dịch cũ) rồi mới <see cref="StockOutForFarmTaskAsync"/>.
+/// Tăng dần theo <c>supplyId</c> để hai yêu cầu đồng thời không khóa chéo dòng <c>supplies</c>;
+/// hủy trước để giao dịch mới được kiểm tra tồn sau khi đã hoàn lại lượng cũ.
+/// </para>
 /// </remarks>
 public interface IStockService
 {
@@ -44,8 +58,8 @@ public interface IStockService
     /// </para>
     /// <para>
     /// Tự sinh <c>request_id</c>; chống ghi trùng là việc của bên gọi, dựa vào <c>stock_transaction_id</c> của dòng vật tư.
-    /// Khóa dòng <c>supplies</c> của vật tư (BR-GEN-12): một lần ghi có nhiều vật tư thì gọi theo thứ tự
-    /// <c>supplyId</c> tăng dần để hai yêu cầu đồng thời không khóa chéo nhau.
+    /// Khóa dòng <c>seasons</c> của mùa vụ rồi dòng <c>supplies</c> của vật tư trước khi kiểm tra (BR-GEN-12), để mùa vụ
+    /// không bị chốt, hủy giữa lúc kiểm tra trạng thái và lúc ghi; thứ tự gọi khi có nhiều vật tư: xem ghi chú của interface.
     /// Ghi nhật ký <c>StockTransaction.StockOut</c>; ghi cảnh báo <c>LOW_STOCK</c>, <c>NEGATIVE_STOCK</c>
     /// qua <c>IWarningCollector</c>.
     /// </para>
@@ -67,18 +81,23 @@ public interface IStockService
     /// nhập lại kho với đơn giá của chính giao dịch đó và cập nhật giá vốn bình quân (BR-SUP-11).
     /// Đây là cách duy nhất hủy giao dịch xuất của công việc (BR-TSK-11).
     /// </summary>
-    /// <param name="stockTransactionId">Giao dịch <c>Out</c> đang gắn với dòng vật tư của công việc.</param>
+    /// <param name="stockTransactionId">
+    /// Giao dịch <c>Out</c> mà một dòng vật tư của công việc đang trỏ tới qua <c>stock_transaction_id</c>.
+    /// </param>
     /// <param name="reason">Lý do hủy, bắt buộc (BR-GEN-06).</param>
     /// <param name="ct">Token hủy.</param>
     /// <remarks>
     /// <para>
-    /// Sửa lượng thực dùng thì gọi hàm này trước rồi mới gọi <see cref="StockOutForFarmTaskAsync"/>,
-    /// để giao dịch mới được kiểm tra tồn sau khi đã hoàn lại lượng cũ.
-    /// Không kiểm tra quyền Quản lý kho, cùng lý do như khi xuất. Khóa dòng <c>supplies</c> (BR-GEN-12);
+    /// Sửa lượng thực dùng thì gọi hàm này trước rồi mới gọi <see cref="StockOutForFarmTaskAsync"/>; thứ tự gọi khi có
+    /// nhiều vật tư: xem ghi chú của interface.
+    /// Không kiểm tra quyền Quản lý kho, cùng lý do như khi xuất, nên chỉ nhận giao dịch <c>Out</c> sinh từ công việc:
+    /// giao dịch nhập, điều chỉnh, xuất thủ công đều bị từ chối, để hàm không thành đường hủy giao dịch kho bỏ qua quyền này.
+    /// Khóa dòng <c>seasons</c> của mùa vụ gắn với giao dịch rồi dòng <c>supplies</c> của vật tư trước khi kiểm tra (BR-GEN-12);
     /// ghi nhật ký <c>StockTransaction.Void</c>.
     /// </para>
     /// <para>
-    /// Lỗi: <c>NOT_FOUND</c> khi giao dịch không thuộc hộ hiện tại; <c>ALREADY_VOIDED</c> khi giao dịch đã bị hủy;
+    /// Lỗi: <c>NOT_FOUND</c> khi giao dịch không thuộc hộ hiện tại, hoặc không phải giao dịch <c>Out</c> mà một dòng vật tư
+    /// của công việc đang trỏ tới; <c>ALREADY_VOIDED</c> khi giao dịch đã bị hủy;
     /// <c>SEASON_INVALID_STATE</c> khi mùa vụ của giao dịch không ở trạng thái <c>InProgress</c>;
     /// <c>VALIDATION_ERROR</c> khi lý do rỗng.
     /// </para>
