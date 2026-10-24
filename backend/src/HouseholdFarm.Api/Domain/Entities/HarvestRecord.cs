@@ -3,7 +3,7 @@ using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Domain.Entities;
 
-public class HarvestRecord : IHouseholdOwned, IAuditable, IVersioned, IVoidable
+public class HarvestRecord : IHouseholdOwned, IAuditable, IVersioned, IVoidable, IRequestIdentified
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 

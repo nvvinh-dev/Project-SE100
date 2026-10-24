@@ -3,7 +3,7 @@ using HouseholdFarm.Api.Domain.Common;
 namespace HouseholdFarm.Api.Domain.Entities;
 
 // BR-SAL-07: thanh toán chỉ có Void, không có Correct.
-public class Payment : IHouseholdOwned, IAuditable, IVersioned, IVoidable
+public class Payment : IHouseholdOwned, IAuditable, IVersioned, IVoidable, IRequestIdentified
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 

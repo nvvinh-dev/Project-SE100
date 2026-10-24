@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentValidation;
+using HouseholdFarm.Api.Common.Auditing;
 using HouseholdFarm.Api.Common.Auth;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Common.Persistence;
@@ -65,6 +66,9 @@ builder.Services.AddDbContext<AppDbContext>((services, options) => options
     .UseNpgsql(services.GetRequiredService<IConfiguration>().GetConnectionString("Default"))
     .UseSnakeCaseNamingConvention()
     .AddInterceptors(services.GetRequiredService<CommonColumnsInterceptor>()));
+
+// Scoped để dùng chung AppDbContext với service gọi nó: nhật ký được lưu cùng lần SaveChangesAsync của thao tác (BR-GEN-07).
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 
 // Điểm nối giữa các module: scoped để bên gọi và bên được gọi dùng chung một AppDbContext, một giao dịch database.
 builder.Services.AddScoped<IStockService, StockService>();

@@ -4,7 +4,7 @@ using HouseholdFarm.Api.Domain.Enums;
 namespace HouseholdFarm.Api.Domain.Entities;
 
 // Chỉ chi phí ghi tay; chi phí vật tư tính từ giá trị xuất kho để không tính trùng.
-public class Expense : IHouseholdOwned, IAuditable, IVersioned, IVoidable
+public class Expense : IHouseholdOwned, IAuditable, IVersioned, IVoidable, IRequestIdentified
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
