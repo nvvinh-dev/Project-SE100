@@ -1,4 +1,5 @@
 using HouseholdFarm.Api.Common.Auth;
+using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Tests.Infrastructure;
@@ -30,6 +31,19 @@ public sealed class TestCurrentUser : ICurrentUser
         UserId = Guid.CreateVersion7(),
         HouseholdId = householdId,
         Role = UserRole.Owner,
+    };
+
+    // Phân công truyền vào vì ICurrentUser thật nạp phân công từ season_assignments, không phải từ tài khoản.
+    public static TestCurrentUser For(ApplicationUser user, params Guid[] assignedSeasonIds) => new()
+    {
+        IsAuthenticated = true,
+        UserId = user.Id,
+        HouseholdId = user.HouseholdId,
+        Role = user.Role,
+        CanManageStock = user.CanManageStock,
+        CanManageFinance = user.CanManageFinance,
+        CanCloseSeason = user.CanCloseSeason,
+        AssignedSeasonIds = assignedSeasonIds,
     };
 
     public static TestCurrentUser SystemAdmin() => new()
