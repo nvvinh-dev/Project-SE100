@@ -443,6 +443,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_seasons", x => x.id);
+                    table.CheckConstraint("ck_seasons_cancel_reason", "cancelled_at IS NULL OR cancel_reason IS NOT NULL");
                     table.CheckConstraint("ck_seasons_expected_harvest_date", "expected_harvest_date >= start_date");
                     table.CheckConstraint("ck_seasons_target_yield", "target_yield > 0");
                     table.ForeignKey(
@@ -515,6 +516,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                 {
                     table.PrimaryKey("pk_expenses", x => x.id);
                     table.CheckConstraint("ck_expenses_amount", "amount > 0");
+                    table.CheckConstraint("ck_expenses_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_expenses_asp_net_users_created_by_id",
                         column: x => x.created_by_id,
@@ -636,6 +638,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                 {
                     table.PrimaryKey("pk_harvest_records", x => x.id);
                     table.CheckConstraint("ck_harvest_records_quantity", "quantity > 0");
+                    table.CheckConstraint("ck_harvest_records_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_harvest_records_asp_net_users_created_by_id",
                         column: x => x.created_by_id,
@@ -695,6 +698,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                 {
                     table.PrimaryKey("pk_produce_stock_adjustments", x => x.id);
                     table.CheckConstraint("ck_produce_stock_adjustments_quantity", "quantity > 0");
+                    table.CheckConstraint("ck_produce_stock_adjustments_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_produce_stock_adjustments_asp_net_users_created_by_id",
                         column: x => x.created_by_id,
@@ -758,6 +762,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                     table.CheckConstraint("ck_sales_customer_or_channel", "customer_id IS NOT NULL OR channel IS NOT NULL");
                     table.CheckConstraint("ck_sales_quantity", "quantity > 0");
                     table.CheckConstraint("ck_sales_unit_price", "unit_price >= 0");
+                    table.CheckConstraint("ck_sales_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_sales_asp_net_users_created_by_id",
                         column: x => x.created_by_id,
@@ -964,6 +969,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                     table.CheckConstraint("ck_stock_transactions_out", "type <> 'Out' OR (quantity < 0 AND season_id IS NOT NULL)");
                     table.CheckConstraint("ck_stock_transactions_total_cost", "total_cost >= 0");
                     table.CheckConstraint("ck_stock_transactions_unit_cost", "unit_cost >= 0");
+                    table.CheckConstraint("ck_stock_transactions_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_stock_transactions_asp_net_users_created_by_id",
                         column: x => x.created_by_id,
@@ -1026,6 +1032,7 @@ namespace HouseholdFarm.Api.Data.Migrations
                 {
                     table.PrimaryKey("pk_payments", x => x.id);
                     table.CheckConstraint("ck_payments_amount", "amount > 0");
+                    table.CheckConstraint("ck_payments_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                     table.ForeignKey(
                         name: "fk_payments_asp_net_users_created_by_id",
                         column: x => x.created_by_id,

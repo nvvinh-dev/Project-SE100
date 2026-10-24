@@ -559,6 +559,8 @@ namespace HouseholdFarm.Api.Data.Migrations
                     b.ToTable("expenses", null, t =>
                         {
                             t.HasCheckConstraint("ck_expenses_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_expenses_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                         });
                 });
 
@@ -866,6 +868,8 @@ namespace HouseholdFarm.Api.Data.Migrations
                     b.ToTable("harvest_records", null, t =>
                         {
                             t.HasCheckConstraint("ck_harvest_records_quantity", "quantity > 0");
+
+                            t.HasCheckConstraint("ck_harvest_records_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                         });
                 });
 
@@ -1022,6 +1026,8 @@ namespace HouseholdFarm.Api.Data.Migrations
                     b.ToTable("payments", null, t =>
                         {
                             t.HasCheckConstraint("ck_payments_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_payments_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                         });
                 });
 
@@ -1229,6 +1235,8 @@ namespace HouseholdFarm.Api.Data.Migrations
                     b.ToTable("produce_stock_adjustments", null, t =>
                         {
                             t.HasCheckConstraint("ck_produce_stock_adjustments_quantity", "quantity > 0");
+
+                            t.HasCheckConstraint("ck_produce_stock_adjustments_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                         });
                 });
 
@@ -1458,6 +1466,8 @@ namespace HouseholdFarm.Api.Data.Migrations
                             t.HasCheckConstraint("ck_sales_quantity", "quantity > 0");
 
                             t.HasCheckConstraint("ck_sales_unit_price", "unit_price >= 0");
+
+                            t.HasCheckConstraint("ck_sales_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                         });
                 });
 
@@ -1608,6 +1618,8 @@ namespace HouseholdFarm.Api.Data.Migrations
 
                     b.ToTable("seasons", null, t =>
                         {
+                            t.HasCheckConstraint("ck_seasons_cancel_reason", "cancelled_at IS NULL OR cancel_reason IS NOT NULL");
+
                             t.HasCheckConstraint("ck_seasons_expected_harvest_date", "expected_harvest_date >= start_date");
 
                             t.HasCheckConstraint("ck_seasons_target_yield", "target_yield > 0");
@@ -1919,6 +1931,8 @@ namespace HouseholdFarm.Api.Data.Migrations
                             t.HasCheckConstraint("ck_stock_transactions_total_cost", "total_cost >= 0");
 
                             t.HasCheckConstraint("ck_stock_transactions_unit_cost", "unit_cost >= 0");
+
+                            t.HasCheckConstraint("ck_stock_transactions_void_reason", "voided_at IS NULL OR void_reason IS NOT NULL");
                         });
                 });
 

@@ -18,6 +18,9 @@ namespace HouseholdFarm.Api.Common.Persistence;
 /// </remarks>
 public sealed class CommonColumnsInterceptor(ICurrentUser currentUser, IAppClock clock) : SaveChangesInterceptor
 {
+    private static readonly string[] _creationColumns =
+        [nameof(IAuditable.CreatedAt), nameof(IAuditable.CreatedById)];
+
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
         if (eventData.Context is not null)
@@ -51,8 +54,16 @@ public sealed class CommonColumnsInterceptor(ICurrentUser currentUser, IAppClock
             if (entry.State == EntityState.Added)
             {
                 FillOnAdd(entry, now);
+                continue;
             }
-            else if (entry.State == EntityState.Modified || HasChangedOwnedReference(entry))
+
+            if (entry.State == EntityState.Modified)
+            {
+                KeepCreationColumns(entry);
+            }
+
+            // Bỏ thay đổi ở cột tạo có thể đưa bản ghi về Unchanged, khi đó không có gì để ghi người sửa.
+            if (entry.State == EntityState.Modified || HasChangedOwnedReference(entry))
             {
                 FillOnUpdate(entry, now);
             }
@@ -63,7 +74,7 @@ public sealed class CommonColumnsInterceptor(ICurrentUser currentUser, IAppClock
     {
         if (entry.Entity is IHouseholdOwned)
         {
-            // BR-GEN-01: hộ luôn lấy từ người đang đăng nhập, ghi đè mọi giá trị đã gán sẵn.
+            // BR-GEN-01: người đã đăng nhập thì hộ luôn lấy từ người đó, ghi đè giá trị đã gán sẵn.
             SetFromCurrentUserOrRequirePreset(entry, nameof(IHouseholdOwned.HouseholdId), currentUser.HouseholdId);
         }
 
@@ -95,20 +106,48 @@ public sealed class CommonColumnsInterceptor(ICurrentUser currentUser, IAppClock
         }
     }
 
-    // Không có người đăng nhập (dữ liệu mẫu, dữ liệu test) thì dùng giá trị bên tạo đã gán; chưa gán là lỗi lập trình,
-    // không để lọt một dòng có Guid rỗng vào database.
-    private static void SetFromCurrentUserOrRequirePreset(EntityEntry entry, string propertyName, Guid? valueFromCurrentUser)
+    private void SetFromCurrentUserOrRequirePreset(EntityEntry entry, string propertyName, Guid? valueFromCurrentUser)
     {
         var property = entry.Property(propertyName);
         if (valueFromCurrentUser is { } value)
         {
             property.CurrentValue = value;
+            return;
         }
-        else if (property.CurrentValue is Guid preset && preset == Guid.Empty)
+
+        // BR-GEN-01: người đã đăng nhập mà không thuộc hộ nào (Quản trị hệ thống) không được ghi dữ liệu của hộ,
+        // kể cả khi bên tạo đã gán hộ: truy cập hỗ trợ chỉ xem (BR-USR-16).
+        if (currentUser.IsAuthenticated)
+        {
+            throw new InvalidOperationException(
+                $"Người dùng không thuộc hộ nào nên không được thêm bản ghi {entry.Metadata.ClrType.Name}.");
+        }
+
+        // Không có người đăng nhập (dữ liệu mẫu, dữ liệu test) thì dùng giá trị bên tạo đã gán; chưa gán là lỗi lập trình,
+        // không để lọt một dòng có Guid rỗng vào database.
+        if (property.CurrentValue is Guid preset && preset == Guid.Empty)
         {
             throw new InvalidOperationException(
                 $"Không xác định được {propertyName} cho bản ghi {entry.Metadata.ClrType.Name} mới: "
                 + "chưa có người đăng nhập và bên tạo chưa gán giá trị.");
+        }
+    }
+
+    // BR-GEN-01: hộ, người tạo, thời điểm tạo không đổi sau khi tạo; service lỡ gán (ví dụ chép giá trị từ request)
+    // thì trả về giá trị cũ để không chuyển được bản ghi sang hộ khác.
+    private static void KeepCreationColumns(EntityEntry entry)
+    {
+        var columns = entry.Entity is IHouseholdOwned
+            ? _creationColumns.Append(nameof(IHouseholdOwned.HouseholdId))
+            : _creationColumns;
+
+        foreach (var name in columns)
+        {
+            if (entry.Metadata.FindProperty(name) is not null && entry.Property(name) is { IsModified: true } property)
+            {
+                property.CurrentValue = property.OriginalValue;
+                property.IsModified = false;
+            }
         }
     }
 

@@ -31,4 +31,11 @@ public sealed class TestCurrentUser : ICurrentUser
         HouseholdId = householdId,
         Role = UserRole.Owner,
     };
+
+    public static TestCurrentUser SystemAdmin() => new()
+    {
+        IsAuthenticated = true,
+        UserId = Guid.CreateVersion7(),
+        Role = UserRole.SystemAdmin,
+    };
 }

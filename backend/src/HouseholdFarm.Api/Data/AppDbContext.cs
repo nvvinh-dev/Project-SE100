@@ -104,7 +104,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser c
 
             if (typeof(IVoidable).IsAssignableFrom(clrType))
             {
-                modelBuilder.Entity(clrType).HasOne(typeof(ApplicationUser)).WithMany().HasForeignKey(nameof(IVoidable.VoidedById));
+                var entity = modelBuilder.Entity(clrType);
+                entity.HasOne(typeof(ApplicationUser)).WithMany().HasForeignKey(nameof(IVoidable.VoidedById));
+
+                // BR-GEN-06: hủy bản ghi bắt buộc lý do.
+                entity.ToTable(t => t.HasCheckConstraint(
+                    $"ck_{entity.Metadata.GetTableName()}_void_reason",
+                    "voided_at IS NULL OR void_reason IS NOT NULL"));
             }
         }
 
