@@ -4,7 +4,7 @@
 bán hàng, chi phí và báo cáo; có trợ lý AI (Google Gemini) làm việc trên dữ liệu đã ghi nhận của hộ.
 
 - **Backend:** .NET 10, ASP.NET Core Web API, EF Core 10 + PostgreSQL 17.
-- **Frontend:** React, TypeScript, Vite (đang dựng).
+- **Frontend:** React 19, TypeScript 6, Vite 8, Tailwind CSS 4, shadcn/ui, TanStack Query.
 
 ## Yêu cầu cài đặt
 
@@ -25,6 +25,11 @@ bán hàng, chi phí và báo cáo; có trợ lý AI (Google Gemini) làm việc
 │   ├── src/HouseholdFarm.Api/
 │   └── tests/HouseholdFarm.Api.Tests/
 └── frontend/
+    └── src/
+        ├── app/            # router, query client, providers
+        ├── components/ui/  # component shadcn/ui
+        ├── lib/            # api client, enum, định dạng
+        └── features/       # mỗi module một thư mục
 ```
 
 ## Chạy database bằng Docker
@@ -63,6 +68,23 @@ dotnet run --project src/HouseholdFarm.Api
 - Tài liệu API (chỉ ở môi trường Development): Swagger UI tại `http://localhost:5080/swagger`, tài liệu OpenAPI tại `/openapi/v1.json`.
 - `dotnet test` cần Docker đang chạy, vì test tích hợp tự bật PostgreSQL tạm bằng Testcontainers.
 - Log ghi ra console và thư mục `backend/src/HouseholdFarm.Api/logs/` (không commit).
+
+## Build, test, chạy frontend
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+- Frontend chạy ở `http://localhost:5173`. Mọi yêu cầu `/api` được chuyển tiếp sang backend ở `http://localhost:5080`, nên chạy backend trước.
+- Kiểm tra trước khi mở PR (CI chạy đúng các lệnh này):
+
+```bash
+npm run lint && npx tsc -b && npm test && npm run build
+```
+
+- Thêm component shadcn/ui: `npx shadcn add <tên component>` (dùng đúng bản CLI trong `package.json`).
 
 ## Sao lưu database demo
 
