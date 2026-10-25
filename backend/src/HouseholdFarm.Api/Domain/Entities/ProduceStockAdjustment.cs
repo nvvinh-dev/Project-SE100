@@ -3,7 +3,7 @@ using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Domain.Entities;
 
-public class ProduceStockAdjustment : IHouseholdOwned, IAuditable, IVersioned, IVoidable
+public class ProduceStockAdjustment : IHouseholdOwned, IAuditable, IVersioned, IVoidable, IRequestIdentified
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 

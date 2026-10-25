@@ -4,7 +4,7 @@ using HouseholdFarm.Api.Domain.Enums;
 namespace HouseholdFarm.Api.Domain.Entities;
 
 // Doanh thu, đã thu, công nợ, trạng thái thanh toán không lưu, tính từ Quantity, UnitPrice và các lần thanh toán.
-public class Sale : IHouseholdOwned, IAuditable, IVersioned, IVoidable
+public class Sale : IHouseholdOwned, IAuditable, IVersioned, IVoidable, IRequestIdentified
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
