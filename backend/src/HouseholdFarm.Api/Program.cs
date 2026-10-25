@@ -10,8 +10,10 @@ using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
+using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Sales;
+using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Features.Supplies;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -74,6 +76,8 @@ builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IStockService, StockService>();
 builder.Services.AddScoped<ISaleHarvestLinkService, SaleHarvestLinkService>();
 builder.Services.AddScoped<ISeasonFinanceService, SeasonFinanceService>();
+builder.Services.AddScoped<IProduceStockService, ProduceStockService>();
+builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 
 var app = builder.Build();
 
