@@ -17,7 +17,10 @@ public interface IProduceStockService
     /// </summary>
     /// <param name="seasonId">Id của mùa vụ cần xem tồn nông sản.</param>
     /// <param name="ct">Token hủy.</param>
-    /// <returns>Danh sách tồn nông sản theo từng loại chất lượng (Grade1, Grade2, Grade3) của mùa vụ.</returns>
+    /// <returns>
+    /// Danh sách luôn đủ 3 dòng cho 3 loại chất lượng theo thứ tự enum (<see cref="QualityGrade.Grade1"/>,
+    /// <see cref="QualityGrade.Grade2"/>, <see cref="QualityGrade.Grade3"/>). Loại chưa có thu hoạch hoặc đã hết thì tồn bằng 0.
+    /// </returns>
     /// <remarks>
     /// <para>
     /// Chỉ đọc dữ liệu, không thay đổi database. Tham gia giao dịch database của bên gọi nếu có.
@@ -36,7 +39,10 @@ public interface IProduceStockService
     /// </summary>
     /// <param name="seasonIds">Danh sách Id mùa vụ; Id trùng chỉ trả một lần, danh sách rỗng trả danh sách rỗng.</param>
     /// <param name="ct">Token hủy.</param>
-    /// <returns>Danh sách tồn nông sản theo mùa vụ và loại chất lượng.</returns>
+    /// <returns>
+    /// Danh sách tồn nông sản theo mùa vụ và loại chất lượng. Mỗi mùa vụ trả đủ 3 dòng theo từng loại chất lượng;
+    /// kết quả không đảm bảo thứ tự mùa vụ, bên gọi tra theo <c>SeasonId</c> và <c>QualityGrade</c>.
+    /// </returns>
     /// <remarks>
     /// <para>
     /// Chỉ đọc dữ liệu, không thay đổi database. Tham gia giao dịch database của bên gọi nếu có.
@@ -53,20 +59,24 @@ public interface IProduceStockService
     /// <param name="qualityGrade">Loại chất lượng nông sản bán.</param>
     /// <param name="quantity">Lượng bán cần kiểm tra (lớn hơn 0).</param>
     /// <param name="currentSaleId">
-    /// Id của giao dịch bán đang điều chỉnh (BR-SAL-03) để hoàn lại lượng của chính giao dịch này trước khi tính tồn;
-    /// truyền <c>null</c> khi tạo mới giao dịch bán (BR-SAL-01).
+    /// Id của giao dịch bán đang điều chỉnh (BR-SAL-03); truyền <c>null</c> khi tạo mới giao dịch bán (BR-SAL-01).
+    /// Tồn khả dụng của cặp (<paramref name="seasonId"/>, <paramref name="qualityGrade"/>) được tính không kể
+    /// giao dịch <paramref name="currentSaleId"/> trong tổng đã bán; cách tính này bảo đảm chính xác cả khi giữ nguyên
+    /// lẫn khi đổi loại chất lượng lúc điều chỉnh.
     /// </param>
     /// <param name="ct">Token hủy.</param>
     /// <remarks>
     /// <para>
+    /// Không kiểm tra quyền và phạm vi: bên gọi đã kiểm tra qua <c>ISeasonStateGuard</c> trước khi gọi hàm này.
     /// Bên gọi (module Sales) phải mở giao dịch database và khóa dòng <c>seasons</c> trước khi gọi hàm này (BR-GEN-12).
     /// Hàm này tham gia giao dịch database của bên gọi, đọc dữ liệu thu hoạch, các giao dịch bán khác và điều chỉnh giảm tồn
     /// để tính tồn khả dụng. Không tự commit.
     /// </para>
     /// <para>
-    /// Lỗi: <c>NOT_FOUND</c> khi mùa vụ không tồn tại trong hộ hoặc ngoài phạm vi;
-    /// <c>INSUFFICIENT_PRODUCE_STOCK</c> khi lượng bán lớn hơn tồn nông sản của cặp (mùa vụ, loại chất lượng).
-    /// Tồn của các loại chất lượng khác không được bù trừ (BR-SAL-01, TC-11).
+    /// Lỗi: <c>NOT_FOUND</c> khi mùa vụ không tồn tại trong hộ;
+    /// <c>INSUFFICIENT_PRODUCE_STOCK</c> khi lượng bán lớn hơn tồn khả dụng của cặp (mùa vụ, loại chất lượng).
+    /// Tồn của các loại chất lượng khác không được bù trừ (BR-HAR-02, TC-12; TC-11 khi bán vượt tồn cùng loại);
+    /// lỗi trả kèm <c>details = { seasonId, qualityGrade, available, requested }</c>.
     /// </para>
     /// </remarks>
     Task EnsureSufficientStockForSaleAsync(
@@ -83,13 +93,15 @@ public interface IProduceStockService
     /// <param name="ct">Token hủy.</param>
     /// <remarks>
     /// <para>
+    /// Không kiểm tra quyền và phạm vi: bên gọi đã kiểm tra qua <c>ISeasonStateGuard</c> trước khi gọi hàm này.
     /// Mùa vụ mất trắng (chưa từng có phiếu thu hoạch) vẫn thỏa mãn điều kiện tồn bằng 0 để chốt (BR-SEA-05).
     /// Tham gia giao dịch database của bên gọi (bên gọi là <c>SeasonService.CloseAsync</c> đã khóa dòng <c>seasons</c> trước).
     /// Không tự mở và không tự commit giao dịch.
     /// </para>
     /// <para>
     /// Lỗi: <c>NOT_FOUND</c> khi mùa vụ không tồn tại trong hộ;
-    /// <c>SEASON_PRODUCE_REMAINING</c> khi mùa vụ vẫn còn tồn nông sản lớn hơn 0 ở bất kỳ loại chất lượng nào.
+    /// <c>SEASON_PRODUCE_REMAINING</c> khi mùa vụ vẫn còn tồn nông sản lớn hơn 0 ở bất kỳ loại chất lượng nào;
+    /// lỗi trả kèm <c>details = { seasonId, remainingStock }</c> danh sách các loại chất lượng còn tồn.
     /// </para>
     /// </remarks>
     Task EnsureZeroStockAsync(Guid seasonId, CancellationToken ct);
@@ -100,15 +112,20 @@ public interface IProduceStockService
     /// </summary>
     /// <param name="seasonId">Mùa vụ của giao dịch bán.</param>
     /// <param name="qualityGrade">Loại chất lượng của giao dịch bán.</param>
-    /// <param name="harvestRecordIds">Danh sách Id phiếu thu hoạch muốn liên kết. Danh sách rỗng thì không làm gì (hợp lệ).</param>
+    /// <param name="harvestRecordIds">
+    /// Danh sách Id phiếu thu hoạch muốn liên kết. Tự động loại bỏ Id trùng lặp trước khi kiểm tra;
+    /// danh sách rỗng thì không làm gì (hợp lệ).
+    /// </param>
     /// <param name="ct">Token hủy.</param>
     /// <remarks>
     /// <para>
+    /// Không kiểm tra quyền và phạm vi: bên gọi đã kiểm tra qua <c>ISeasonStateGuard</c> trước khi gọi hàm này.
     /// Liên kết phiếu thu là tùy chọn, không ràng buộc số lượng thu so với lượng bán (chỉ để tham khảo).
     /// Tham gia giao dịch database của bên gọi nếu có; chỉ đọc dữ liệu để kiểm tra.
     /// </para>
     /// <para>
-    /// Lỗi: <c>VALIDATION_ERROR</c> khi có phiếu không thuộc hộ, khác mùa vụ, khác loại chất lượng, hoặc đã bị Void.
+    /// Lỗi: <c>VALIDATION_ERROR</c> khi có phiếu không thuộc hộ, khác mùa vụ, khác loại chất lượng, hoặc đã bị Void;
+    /// lỗi trả kèm <c>details = { invalidHarvestRecordIds }</c> chứa danh sách Id các phiếu không hợp lệ.
     /// </para>
     /// </remarks>
     Task ValidateHarvestLinksForSaleAsync(
@@ -117,4 +134,3 @@ public interface IProduceStockService
         IReadOnlyCollection<Guid> harvestRecordIds,
         CancellationToken ct);
 }
-

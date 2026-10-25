@@ -11,12 +11,11 @@ namespace HouseholdFarm.Api.Features.Harvests;
 /// <param name="TotalHarvested">Tổng sản lượng thu hoạch chưa Void.</param>
 /// <param name="TotalSold">Tổng sản lượng đã bán chưa Void.</param>
 /// <param name="TotalAdjusted">Tổng sản lượng điều chỉnh giảm chưa Void.</param>
-/// <param name="StockQuantity">Lượng tồn hiện tại (= TotalHarvested - TotalSold - TotalAdjusted).</param>
+/// <param name="Quantity">Lượng tồn hiện tại (= TotalHarvested - TotalSold - TotalAdjusted).</param>
 public record ProduceStockResponse(
     Guid SeasonId,
     QualityGrade QualityGrade,
     decimal TotalHarvested,
     decimal TotalSold,
     decimal TotalAdjusted,
-    decimal StockQuantity);
-
+    decimal Quantity);

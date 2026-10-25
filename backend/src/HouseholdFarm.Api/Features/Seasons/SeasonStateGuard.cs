@@ -8,14 +8,15 @@ public class SeasonStateGuard : ISeasonStateGuard
     public Task<SeasonStateResponse> EnsureStatusAsync(
         Guid seasonId,
         IReadOnlyCollection<SeasonStatus> allowedStatuses,
-        bool forUpdate = false,
-        CancellationToken ct = default) =>
+        ExtraPermission? outOfScopePermission,
+        bool forUpdate,
+        CancellationToken ct) =>
         throw new NotImplementedException();
 
     public Task<SeasonStateResponse> EnsureInProgressAsync(
         Guid seasonId,
-        bool forUpdate = false,
-        CancellationToken ct = default) =>
+        ExtraPermission? outOfScopePermission,
+        bool forUpdate,
+        CancellationToken ct) =>
         throw new NotImplementedException();
 }
-
