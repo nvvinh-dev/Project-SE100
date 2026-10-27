@@ -65,3 +65,34 @@ export function toApiError(error: AxiosError): ApiError {
     details: data.details,
   });
 }
+
+/** Câu hiển thị cho một lỗi bất kỳ: lỗi API dùng nguyên văn câu backend viết, lỗi khác dùng câu chung. */
+export function getErrorMessage(error: unknown): string {
+  return error instanceof ApiError ? error.message : UNEXPECTED_ERROR_MESSAGE;
+}
+
+/** Một bản ghi bị ảnh hưởng, liệt kê trong hộp thoại xác nhận (BR-GEN-14). */
+export interface ConfirmationItem {
+  id: string;
+  label: string;
+}
+
+function isConfirmationItem(value: unknown): value is ConfirmationItem {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "label" in value &&
+    typeof value.label === "string"
+  );
+}
+
+/** `details.items` của lỗi `CONFIRMATION_REQUIRED`; lỗi khác hoặc dữ liệu sai dạng thì trả mảng rỗng. */
+export function getConfirmationItems(error: unknown): ConfirmationItem[] {
+  if (!(error instanceof ApiError) || error.code !== "CONFIRMATION_REQUIRED") {
+    return [];
+  }
+  const items = error.details?.items;
+  return Array.isArray(items) ? items.filter(isConfirmationItem) : [];
+}
