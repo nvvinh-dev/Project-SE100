@@ -15,8 +15,8 @@ public static class AppProblemDetails
     private static readonly Dictionary<int, (string Code, string Detail)> _frameworkErrors = new()
     {
         [StatusCodes.Status400BadRequest] = (ErrorCodes.ValidationError, "Yêu cầu không hợp lệ."),
-        [StatusCodes.Status401Unauthorized] = (ErrorCodes.Unauthenticated, "Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn."),
-        [StatusCodes.Status403Forbidden] = (ErrorCodes.Forbidden, "Bạn không có quyền thực hiện thao tác này."),
+        [StatusCodes.Status401Unauthorized] = (ErrorCodes.Unauthenticated, "Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn."),
+        [StatusCodes.Status403Forbidden] = (ErrorCodes.Forbidden, "Tài khoản không có quyền thực hiện thao tác này."),
         [StatusCodes.Status404NotFound] = (ErrorCodes.NotFound, "Không tìm thấy địa chỉ được yêu cầu."),
     };
 

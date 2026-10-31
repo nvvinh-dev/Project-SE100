@@ -1,6 +1,9 @@
+using HouseholdFarm.Api.Common.Auth;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Common.Responses;
+using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -53,6 +56,19 @@ public sealed class ProbeController(IWarningCollector warnings) : ControllerBase
         warnings.Add(WarningCodes.NegativeStock, "Tồn Phân NPK sau khi xuất còn -3 kg.");
         return Sample;
     }
+
+    // Người dùng hiện tại sau khi được nạp từ database, và thửa mà Global Query Filter cho thấy với người đó.
+    [Authorize]
+    [HttpGet("current-user")]
+    public async Task<ActionResult<ProbeCurrentUser>> GetCurrentUserAsync(
+        [FromServices] ICurrentUser currentUser,
+        [FromServices] AppDbContext db,
+        CancellationToken ct) => new ProbeCurrentUser(
+            currentUser.UserId,
+            currentUser.HouseholdId,
+            currentUser.Role,
+            currentUser.AssignedSeasonIds,
+            await db.Plots.Select(p => p.Id).ToListAsync(ct));
 
     [HttpGet("errors/insufficient-stock")]
     public IActionResult ThrowInsufficientStock() => throw new AppException(

@@ -25,3 +25,10 @@ public sealed record CreateProbeRequest(
 public sealed record ProbeQuery : PageQuery;
 
 public sealed record ProbeListItem(int Number);
+
+public sealed record ProbeCurrentUser(
+    Guid UserId,
+    Guid? HouseholdId,
+    UserRole Role,
+    IReadOnlyList<Guid> AssignedSeasonIds,
+    IReadOnlyList<Guid> VisiblePlotIds);

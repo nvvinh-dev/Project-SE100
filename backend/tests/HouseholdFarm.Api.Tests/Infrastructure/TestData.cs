@@ -76,6 +76,8 @@ public static class TestData
             PhoneNumber = phone,
             PasswordHash = _passwordHash.Value,
             SecurityStamp = Guid.CreateVersion7().ToString("N"),
+            // Như tài khoản tạo bằng UserManager: khóa tạm khi đăng nhập sai nhiều lần (BR-USR-15).
+            LockoutEnabled = true,
         };
     }
 }
