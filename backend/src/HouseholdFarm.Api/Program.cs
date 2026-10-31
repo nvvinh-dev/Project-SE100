@@ -10,6 +10,7 @@ using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
+using HouseholdFarm.Api.Features.Auth;
 using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Sales;
@@ -53,13 +54,13 @@ builder.Services.AddScoped<IWarningCollector, WarningCollector>();
 ValidatorOptions.Global.LanguageManager.Culture = new CultureInfo("vi");
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IAppClock, AppClock>();
 
-// Lớp tạm cho tới FR-AUTH-02, khi người dùng hiện tại được nạp từ database mỗi yêu cầu.
-builder.Services.AddScoped<ICurrentUser, AnonymousCurrentUser>();
+// Người dùng hiện tại nạp từ database mỗi yêu cầu (D-11), dùng cho Global Query Filter và kiểm tra quyền.
+builder.Services.AddAppAuthentication();
 
 // Chuỗi kết nối đọc lúc tạo DbContext, không đọc lúc khởi động, để test thay được bằng database của Testcontainers.
 // Không bật EnableRetryOnFailure: cơ chế tự thử lại không chạy được với giao dịch database mở bằng tay.
@@ -79,6 +80,8 @@ builder.Services.AddScoped<ISeasonFinanceService, SeasonFinanceService>();
 builder.Services.AddScoped<IProduceStockService, ProduceStockService>();
 builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 
+builder.Services.AddScoped<IAuthService, AuthService>();
+
 var app = builder.Build();
 
 // Chỉ ghi phương thức, đường dẫn, mã trả về và thời gian; không ghi query string vì có thể chứa số điện thoại khi tìm kiếm.
@@ -95,6 +98,11 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "v1"));
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
+// Sau bước phân quyền theo [Authorize]: yêu cầu thiếu token đã bị từ chối, chỉ còn yêu cầu cần nạp người dùng.
+app.UseMiddleware<CurrentUserMiddleware>();
 
 app.MapControllers();
 
