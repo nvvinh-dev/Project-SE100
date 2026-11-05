@@ -89,6 +89,19 @@ public sealed class AuthService(
             throw InvalidCredentials();
         }
 
+        // Khóa người dùng rồi đọc lại trước khi cấp phiên: đổi mật khẩu, khóa tài khoản chạy cùng lúc đã thu hồi mọi token
+        // thì không được cấp thêm token theo mật khẩu cũ hay trạng thái cũ.
+        var securityStamp = user.SecurityStamp;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await refreshTokenRevoker.LockUserAsync(user.Id, ct);
+        await db.Entry(user).ReloadAsync(ct);
+
+        // Đổi mật khẩu, đặt lại mật khẩu thì Identity đổi security stamp: mật khẩu vừa kiểm tra không còn đúng.
+        if (user.SecurityStamp != securityStamp)
+        {
+            throw InvalidCredentials();
+        }
+
         // BR-USR-03: chỉ báo tài khoản bị khóa khi đã đúng mật khẩu, để người ngoài không dò được tài khoản nào đang bị khóa.
         if (user.IsLocked)
         {
@@ -96,10 +109,11 @@ public sealed class AuthService(
         }
 
         // BR-USR-15: đăng nhập thành công thì bộ đếm sai về 0.
-        await userManager.ResetAccessFailedCountAsync(user);
+        await SaveUserAsync(() => userManager.ResetAccessFailedCountAsync(user));
 
         var (session, _) = StartSession(user.Id);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return session;
     }
 
@@ -112,6 +126,15 @@ public sealed class AuthService(
 
         var tokenHash = HashRefreshToken(refreshToken);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Khóa người dùng trước token, cùng thứ tự với thu hồi mọi phiên: đổi mật khẩu, khóa tài khoản chạy cùng lúc
+        // phải chờ lần làm mới này xong rồi mới thu hồi, nên thu hồi cả token vừa cấp.
+        var userId = await db.RefreshTokens
+            .Where(t => t.TokenHash == tokenHash)
+            .Select(t => (Guid?)t.UserId)
+            .SingleOrDefaultAsync(ct)
+            ?? throw InvalidRefreshToken();
+        await refreshTokenRevoker.LockUserAsync(userId, ct);
 
         // Khóa dòng token: hai yêu cầu làm mới cùng lúc bằng một token thì yêu cầu sau thấy token đã bị thu hồi,
         // không cấp được hai token mới từ một token cũ.
@@ -170,6 +193,10 @@ public sealed class AuthService(
     public async Task ChangePasswordAsync(ChangePasswordRequest request, CancellationToken ct)
     {
         currentUser.EnsureAuthenticated();
+
+        // Khóa người dùng trước khi đọc: hai lần đổi mật khẩu cùng lúc chạy lần lượt, lần sau kiểm tra trên mật khẩu đã đổi.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await refreshTokenRevoker.LockUserAsync(currentUser.UserId, ct);
         var user = await userManager.FindByIdAsync(currentUser.UserId.ToString())
             ?? throw new InvalidOperationException("Không tìm thấy tài khoản của người đang đăng nhập.");
 
@@ -179,7 +206,6 @@ public sealed class AuthService(
             throw new AppException(ErrorCodes.InvalidCredentials, "Mật khẩu hiện tại không đúng.");
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await SaveUserAsync(() => userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword));
 
         // BR-USR-04: kết thúc mọi phiên, kể cả phiên đang dùng; người dùng đăng nhập lại bằng mật khẩu mới.
@@ -212,6 +238,10 @@ public sealed class AuthService(
 
         // Validator đã bảo đảm số chuẩn hóa được (BR-USR-01).
         var phone = PhoneNumbers.Normalize(request.Phone)!;
+
+        // Khóa người dùng trước khi đọc: hai lần sửa cùng lúc chạy lần lượt, lần sau đọc bản đã sửa.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await refreshTokenRevoker.LockUserAsync(currentUser.UserId, ct);
         await EnsurePhoneUnusedAsync(phone, exceptUserId: currentUser.UserId, ct);
 
         var user = await userManager.FindByIdAsync(currentUser.UserId.ToString())
@@ -221,6 +251,7 @@ public sealed class AuthService(
         user.UserName = phone;
         user.PhoneNumber = phone;
         await SaveUserAsync(() => userManager.UpdateAsync(user));
+        await transaction.CommitAsync(ct);
 
         return await GetMeAsync(ct);
     }
@@ -252,6 +283,15 @@ public sealed class AuthService(
         if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.DuplicateUserName)))
         {
             throw PhoneAlreadyUsed();
+        }
+
+        // BR-GEN-11: thao tác của AUTH đã khóa dòng người dùng nên hiếm gặp; vẫn báo đúng mã thay vì lỗi 500,
+        // vì thao tác của module khác (Chủ hộ sửa thành viên, quản trị) có thể sửa tài khoản cùng lúc.
+        if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure)))
+        {
+            throw new AppException(
+                ErrorCodes.ConcurrencyConflict,
+                "Thông tin tài khoản vừa được thay đổi ở nơi khác. Tải lại rồi thử lại.");
         }
 
         // Validator đã kiểm tra mật khẩu theo cùng chính sách với Identity, lỗi còn lại là lỗi lập trình.
