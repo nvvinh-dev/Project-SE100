@@ -97,9 +97,10 @@ public static class TestData
         Plot plot,
         SeasonStatus status,
         CancellationToken ct,
-        ApplicationUser? taskAssignee = null)
+        ApplicationUser? taskAssignee = null,
+        Crop? crop = null)
     {
-        var crop = new Crop
+        var actualCrop = crop ?? new Crop
         {
             Name = $"Lúa test {Guid.CreateVersion7():N}",
             Group = CropGroup.Staple,
@@ -109,7 +110,7 @@ public static class TestData
         var season = new Season
         {
             PlotId = plot.Id,
-            CropId = crop.Id,
+            CropId = actualCrop.Id,
             StartDate = new DateOnly(2026, 10, 1),
             ExpectedHarvestDate = new DateOnly(2027, 1, 15),
             TargetYield = 5000m,
@@ -117,7 +118,10 @@ public static class TestData
         };
 
         await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
-        db.Crops.Add(crop);
+        if (crop is null)
+        {
+            db.Crops.Add(actualCrop);
+        }
         db.Seasons.Add(season);
         if (taskAssignee is not null)
         {
@@ -133,6 +137,47 @@ public static class TestData
 
         await db.SaveChangesAsync(ct);
         return season;
+    }
+
+    /// <summary>Tạo cây trồng mới của hộ.</summary>
+    public static async Task<Crop> CreateCropAsync(
+        PostgresFixture postgres,
+        TestHousehold household,
+        string name,
+        CancellationToken ct,
+        RecordStatus status = RecordStatus.Active,
+        CropGroup group = CropGroup.Staple,
+        Unit yieldUnit = Unit.Kilogram)
+    {
+        var crop = new Crop
+        {
+            Name = name,
+            Group = group,
+            YieldUnit = yieldUnit,
+            Status = status,
+        };
+
+        await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        db.Crops.Add(crop);
+        await db.SaveChangesAsync(ct);
+        return crop;
+    }
+
+    /// <summary>Phân công một thành viên vào mùa vụ.</summary>
+    public static async Task AssignMemberAsync(
+        PostgresFixture postgres,
+        TestHousehold household,
+        Season season,
+        ApplicationUser member,
+        CancellationToken ct)
+    {
+        await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        db.SeasonAssignments.Add(new SeasonAssignment
+        {
+            SeasonId = season.Id,
+            UserId = member.Id,
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Số điện thoại đã chuẩn hóa (10 chữ số bắt đầu bằng 0, BR-USR-01) chưa tài khoản nào dùng.</summary>

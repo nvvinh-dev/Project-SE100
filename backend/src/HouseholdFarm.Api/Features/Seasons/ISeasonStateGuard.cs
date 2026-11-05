@@ -82,4 +82,21 @@ public interface ISeasonStateGuard
         ExtraPermission? outOfScopePermission,
         bool forUpdate,
         CancellationToken ct);
+
+    /// <summary>
+    /// Kiểm tra mùa vụ cho một loại thao tác cụ thể theo quy tắc trạng thái (BR-SEA-10).
+    /// Tự động tra cứu danh sách trạng thái cho phép và quyền bổ sung ngoài phân công tương ứng (BR-USR-13).
+    /// </summary>
+    /// <param name="seasonId">Id mùa vụ cần kiểm tra.</param>
+    /// <param name="operation">Loại thao tác cần thực hiện.</param>
+    /// <param name="forUpdate">
+    /// <c>true</c> nếu bên gọi cần khóa dòng seasons bằng <c>FOR UPDATE</c> trong giao dịch database (BR-GEN-12).
+    /// </param>
+    /// <param name="ct">Token hủy.</param>
+    /// <returns>Thông tin tóm tắt của mùa vụ.</returns>
+    Task<SeasonStateResponse> EnsureOperationAllowedAsync(
+        Guid seasonId,
+        SeasonOperation operation,
+        bool forUpdate,
+        CancellationToken ct);
 }
