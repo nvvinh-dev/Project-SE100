@@ -1,5 +1,6 @@
 import axios, { isAxiosError, isCancel, type InternalAxiosRequestConfig } from "axios";
 import { type ApiError, toApiError } from "@/lib/api-error";
+import { withRefreshLock } from "@/lib/auth/refresh-lock";
 import { getAccessToken, setAccessToken } from "@/lib/auth/token-store";
 import type { AccessTokenResponse } from "@/lib/auth/types";
 
@@ -54,12 +55,12 @@ export function setSessionEndedHandler(handler: ((error?: ApiError) => void) | n
 }
 
 /**
- * Lấy access token mới bằng cookie refresh token (FR-AUTH-03). Nhiều yêu cầu cùng lúc dùng chung một lần làm mới:
- * mỗi refresh token chỉ dùng được một lần, gửi lại token vừa bị thay thì backend thu hồi mọi phiên (BR-USR-05).
+ * Lấy access token mới bằng cookie refresh token (FR-AUTH-03). Nhiều yêu cầu cùng lúc dùng chung một lần làm mới,
+ * các tab làm mới lần lượt: mỗi refresh token chỉ dùng được một lần, gửi lại token vừa bị thay thì backend thu hồi
+ * mọi phiên (BR-USR-05).
  */
 export function refreshAccessToken(): Promise<boolean> {
-  refreshing ??= apiClient
-    .post<ResponseEnvelope<AccessTokenResponse>>("/auth/refresh")
+  refreshing ??= withRefreshLock(() => apiClient.post<ResponseEnvelope<AccessTokenResponse>>("/auth/refresh"))
     .then((response) => {
       setAccessToken(response.data.data.accessToken);
       return true;
