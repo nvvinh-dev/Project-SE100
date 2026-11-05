@@ -3,6 +3,9 @@ using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Features.Plots;
 
+// Enum bắt buộc khai báo nullable: thiếu trường trong JSON thì nhận null và validator báo thiếu.
+// Khai báo không nullable thì thiếu trường thành giá trị 0 của enum (Alluvial, Well, Active) và được lưu như thật.
+
 /// <summary>Tạo thửa đất. Thửa mới luôn ở trạng thái <c>Active</c>.</summary>
 /// <param name="Code">Để trống thì hệ thống tự sinh dạng <c>TD001</c> (BR-CAT-01).</param>
 /// <param name="AreaM2">Diện tích, luôn bằng m².</param>
@@ -12,9 +15,9 @@ public sealed record CreatePlotRequest(
     string? Code,
     decimal AreaM2,
     string? LocationDescription,
-    SoilType SoilType,
+    SoilType? SoilType,
     string? SoilTypeOther,
-    WaterSource WaterSource,
+    WaterSource? WaterSource,
     string? WaterSourceOther,
     string? Note);
 
@@ -24,11 +27,11 @@ public sealed record UpdatePlotRequest(
     string Code,
     decimal AreaM2,
     string? LocationDescription,
-    SoilType SoilType,
+    SoilType? SoilType,
     string? SoilTypeOther,
-    WaterSource WaterSource,
+    WaterSource? WaterSource,
     string? WaterSourceOther,
-    RecordStatus Status,
+    RecordStatus? Status,
     string? Note,
     uint Version);
 

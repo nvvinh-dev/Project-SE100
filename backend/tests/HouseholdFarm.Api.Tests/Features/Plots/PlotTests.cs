@@ -307,6 +307,78 @@ public class PlotTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await unknownSoil.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
     }
 
+    [Fact(DisplayName = "BR-CAT-01: nhiều yêu cầu tạo thửa cùng lúc với mã tự sinh đều thành công, mỗi thửa một mã")]
+    public async Task Create_ConcurrentlyWithoutCode_RetriesAndGivesDistinctCodes()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var client = factory.CreateClientFor(household.Owner);
+
+        // Các yêu cầu cùng đọc ra một số lớn nhất nên sinh trùng mã; yêu cầu thua phải sinh lại mã rồi lưu lại.
+        var responses = await Task.WhenAll(
+            Enumerable.Range(0, 5).Select(_ => client.PostAsJsonAsync(PlotsPath, NewPlot(code: null), ct)));
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+        await using var db = factory.Postgres.CreateDbContext();
+        var codes = await db.Plots.IgnoreQueryFilters()
+            .Where(p => p.HouseholdId == household.Household.Id)
+            .Select(p => p.Code)
+            .OrderBy(c => c)
+            .ToListAsync(ct);
+        Assert.Equal(["TD001", "TD002", "TD003", "TD004", "TD005"], codes);
+    }
+
+    [Fact(DisplayName = "Thiếu loại đất, nguồn nước khi tạo trả VALIDATION_ERROR, không lưu giá trị mặc định")]
+    public async Task Create_WithoutEnums_ReturnsValidationError()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+
+        var response = await factory.CreateClientFor(household.Owner)
+            .PostAsJsonAsync(PlotsPath, new { areaM2 = 100m }, ct);
+
+        var problem = await response.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+        Assert.Equal("Vui lòng chọn loại đất.", problem.GetProperty("errors").GetProperty("soilType")[0].GetString());
+        Assert.Equal("Vui lòng chọn nguồn nước.", problem.GetProperty("errors").GetProperty("waterSource")[0].GetString());
+    }
+
+    [Fact(DisplayName = "Sửa thửa thiếu tình trạng sử dụng trả VALIDATION_ERROR, thửa ngừng sử dụng không bị bật lại")]
+    public async Task Update_WithoutStatus_ReturnsValidationErrorAndKeepsStatus()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var client = factory.CreateClientFor(household.Owner);
+        var deactivated = await client.PutAsJsonAsync($"{PlotsPath}/{plot.Id}", UpdateOf("TD001", plot.Version, "Inactive"), ct);
+        var version = (await deactivated.ReadJsonAsync(ct)).GetProperty("data").GetProperty("version").GetUInt32();
+
+        var response = await client.PutAsJsonAsync(
+            $"{PlotsPath}/{plot.Id}",
+            new { code = "TD001", areaM2 = 1000m, soilType = "Alluvial", waterSource = "RiverCanal", version },
+            ct);
+
+        var problem = await response.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+        Assert.Equal("Vui lòng chọn tình trạng sử dụng.", problem.GetProperty("errors").GetProperty("status")[0].GetString());
+        await using var db = factory.Postgres.CreateDbContext();
+        Assert.Equal(RecordStatus.Inactive, (await db.Plots.IgnoreQueryFilters().SingleAsync(p => p.Id == plot.Id, ct)).Status);
+    }
+
+    [Theory(DisplayName = "Diện tích lẻ hơn 2 chữ số sau dấu phẩy hoặc quá lớn so với cột trả VALIDATION_ERROR, không lỗi 500")]
+    [InlineData("0.001")]
+    [InlineData("1500.555")]
+    [InlineData("100000000000000000")]
+    public async Task Create_AreaBeyondColumnPrecision_ReturnsValidationError(string area)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+
+        var response = await factory.CreateClientFor(household.Owner)
+            .PostAsJsonAsync(PlotsPath, NewPlot(code: null, areaM2: decimal.Parse(area, System.Globalization.CultureInfo.InvariantCulture)), ct);
+
+        var problem = await response.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+        Assert.True(problem.GetProperty("errors").TryGetProperty("areaM2", out _));
+    }
+
     private static object NewPlot(string? code, decimal areaM2 = 1500.5m) => new
     {
         code,

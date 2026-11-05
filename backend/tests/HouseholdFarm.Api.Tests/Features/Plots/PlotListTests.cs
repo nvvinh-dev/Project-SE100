@@ -119,6 +119,27 @@ public class PlotListTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(JsonValueKind.Null, item.GetProperty("status").ValueKind);
     }
 
+    [Fact(DisplayName = "BR-USR-14: Nhân công lọc theo tình trạng, loại đất, nguồn nước, sắp theo diện tích không dò ra được giá trị")]
+    public async Task List_Worker_IgnoresHiddenFiltersAndSort()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var large = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct, areaM2: 5000m);
+        var small = await TestData.CreatePlotAsync(factory.Postgres, household, "TD002", ct, areaM2: 100m);
+        await TestData.CreateSeasonAsync(factory.Postgres, household, large, SeasonStatus.InProgress, ct, household.Worker);
+        await TestData.CreateSeasonAsync(factory.Postgres, household, small, SeasonStatus.InProgress, ct, household.Worker);
+        var client = factory.CreateClientFor(household.Worker);
+
+        // Cả hai thửa đều Active, phù sa, sông/kênh: nếu bộ lọc có tác dụng thì kết quả sẽ rỗng.
+        Assert.Equal(["TD001", "TD002"], await CodesAsync(client, "?status=Inactive", ct));
+        Assert.Equal(["TD001", "TD002"], await CodesAsync(client, "?soilType=Clay&waterSource=Well", ct));
+        // Sắp theo diện tích tăng dần sẽ cho TD002 trước; Nhân công luôn được sắp theo mã.
+        Assert.Equal(["TD001", "TD002"], await CodesAsync(client, "?sort=areaM2", ct));
+        Assert.Equal(["TD001", "TD002"], await CodesAsync(client, "?sort=-code", ct));
+        // Mã, vị trí thì Nhân công được thấy nên vẫn tìm được.
+        Assert.Equal(["TD002"], await CodesAsync(client, "?search=TD002", ct));
+    }
+
     private async Task<List<string?>> CodesAsync(HttpClient client, string queryString, CancellationToken ct)
     {
         var response = await client.GetAsync(PlotsPath + queryString, ct);

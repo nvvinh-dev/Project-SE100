@@ -15,6 +15,9 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
     // BR-CAT-01: tiền tố mã thửa tự sinh.
     private const string CodePrefix = "TD";
 
+    // Độ dài cột plots.code.
+    private const int CodeMaxLength = 20;
+
     // Dịch biểu thức một lần, dùng khi đã có entity trong bộ nhớ (sau khi tạo, sửa).
     private static readonly Func<Plot, PlotResponse> _toOwnerResponse = ToResponse(isWorker: false).Compile();
 
@@ -24,6 +27,14 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
 
         // Không thêm điều kiện theo hộ: Global Query Filter đã lọc. VisibleTo chỉ thu hẹp thêm trong hộ.
         var plots = db.Plots.AsNoTracking().VisibleTo(currentUser);
+        var isWorker = IsWorker();
+
+        // BR-USR-14: Nhân công không được thấy tình trạng, loại đất, nguồn nước, diện tích. Lọc hay sắp xếp theo các trường
+        // này cũng dò ra được giá trị, nên với Nhân công bỏ qua các tham số đó, chỉ tìm theo mã, vị trí và sắp theo mã.
+        if (isWorker)
+        {
+            query = query with { Status = null, SoilType = null, WaterSource = null, Sort = null };
+        }
 
         if (query.Status is { } status)
         {
@@ -49,7 +60,6 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
         }
 
         // Sắp thêm theo Id để thứ tự giữa các trang ổn định khi giá trị sắp xếp trùng nhau.
-        var isWorker = IsWorker();
         return await Sort(plots, query.Sort)
             .ThenBy(p => p.Id)
             .Select(p => new PlotListItem(
@@ -81,15 +91,19 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
     {
         currentUser.EnsureOwner();
 
+        // Validator đã bảo đảm các enum có giá trị.
+        var soilType = request.SoilType!.Value;
+        var waterSource = request.WaterSource!.Value;
+
         // Không gán HouseholdId, CreatedAt, CreatedById: interceptor lấy từ người đang đăng nhập (BR-GEN-01, TC-10).
         var plot = new Plot
         {
             AreaM2 = request.AreaM2,
             LocationDescription = TrimToNull(request.LocationDescription),
-            SoilType = request.SoilType,
-            SoilTypeOther = request.SoilType == SoilType.Other ? TrimToNull(request.SoilTypeOther) : null,
-            WaterSource = request.WaterSource,
-            WaterSourceOther = request.WaterSource == WaterSource.Other ? TrimToNull(request.WaterSourceOther) : null,
+            SoilType = soilType,
+            SoilTypeOther = soilType == SoilType.Other ? TrimToNull(request.SoilTypeOther) : null,
+            WaterSource = waterSource,
+            WaterSourceOther = waterSource == WaterSource.Other ? TrimToNull(request.WaterSourceOther) : null,
             Status = RecordStatus.Active,
             Note = TrimToNull(request.Note),
         };
@@ -115,6 +129,11 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
 
         var plot = await db.Plots.VisibleTo(currentUser).SingleOrDefaultAsync(p => p.Id == id, ct) ?? throw NotFound();
 
+        // Validator đã bảo đảm các enum có giá trị.
+        var soilType = request.SoilType!.Value;
+        var waterSource = request.WaterSource!.Value;
+        var status = request.Status!.Value;
+
         // BR-GEN-11: người khác đã sửa sau lần đọc của người này thì lưu báo CONCURRENCY_CONFLICT, không ghi đè.
         db.Entry(plot).Property(p => p.Version).OriginalValue = request.Version;
 
@@ -124,7 +143,7 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
             await EnsureCodeUnusedAsync(code, exceptId: plot.Id, ct);
         }
 
-        if (plot.Status == RecordStatus.Active && request.Status == RecordStatus.Inactive)
+        if (plot.Status == RecordStatus.Active && status == RecordStatus.Inactive)
         {
             await EnsureNoRunningSeasonAsync(plot, ct);
         }
@@ -132,11 +151,11 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
         plot.Code = code;
         plot.AreaM2 = request.AreaM2;
         plot.LocationDescription = TrimToNull(request.LocationDescription);
-        plot.SoilType = request.SoilType;
-        plot.SoilTypeOther = request.SoilType == SoilType.Other ? TrimToNull(request.SoilTypeOther) : null;
-        plot.WaterSource = request.WaterSource;
-        plot.WaterSourceOther = request.WaterSource == WaterSource.Other ? TrimToNull(request.WaterSourceOther) : null;
-        plot.Status = request.Status;
+        plot.SoilType = soilType;
+        plot.SoilTypeOther = soilType == SoilType.Other ? TrimToNull(request.SoilTypeOther) : null;
+        plot.WaterSource = waterSource;
+        plot.WaterSourceOther = waterSource == WaterSource.Other ? TrimToNull(request.WaterSourceOther) : null;
+        plot.Status = status;
         plot.Note = TrimToNull(request.Note);
         await SaveAsync(code, ct);
 
@@ -172,7 +191,7 @@ public sealed class PlotService(AppDbContext db, ICurrentUser currentUser) : IPl
     {
         for (var attempt = 1; ; attempt++)
         {
-            plot.Code = await CatalogCodes.NextAsync(db.Plots.Select(p => p.Code), CodePrefix, ct);
+            plot.Code = await CatalogCodes.NextAsync(db.Plots.Select(p => p.Code), CodePrefix, CodeMaxLength, ct);
             try
             {
                 await db.SaveChangesAsync(ct);
