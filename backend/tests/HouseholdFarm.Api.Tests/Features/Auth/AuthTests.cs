@@ -220,6 +220,24 @@ public class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         }
     }
 
+    [Fact(DisplayName = "D-10: access token vừa hết hạn 1 phút trả 401 UNAUTHENTICATED, không được chấp nhận thêm")]
+    public async Task Me_WithJustExpiredToken_ReturnsUnauthenticated()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var jwt = new JwtSettings(factory.Services.GetRequiredService<IConfiguration>());
+        // Cấp lùi lại đủ để token hết hạn cách đây 1 phút, nhỏ hơn mức lệch đồng hồ mặc định 5 phút của thư viện.
+        var issuedAt = TimeProvider.System.GetUtcNow() - jwt.AccessTokenLifetime - TimeSpan.FromMinutes(1);
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            new AccessTokenIssuer(jwt, TestClock.At(issuedAt)).Create(household.Owner.Id));
+
+        var response = await client.GetAsync(MePath, ct);
+
+        await response.AssertProblemAsync(HttpStatusCode.Unauthorized, ErrorCodes.Unauthenticated, ct);
+    }
+
     [Fact(DisplayName = "/api/auth/me trả đúng vai trò, hộ và ba quyền bổ sung của người đang đăng nhập")]
     public async Task Me_ReturnsRoleHouseholdAndExtraPermissions()
     {

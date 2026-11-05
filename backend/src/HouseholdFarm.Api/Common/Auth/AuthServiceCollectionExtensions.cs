@@ -47,6 +47,9 @@ public static class AuthServiceCollectionExtensions
                 IssuerSigningKey = jwt.FindSigningKey(),
                 ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                 NameClaimType = JwtRegisteredClaimNames.Sub,
+                // D-10: access token hết hạn đúng Jwt:AccessTokenMinutes. Mặc định thư viện cho lệch đồng hồ 5 phút, nhưng
+                // token do chính máy chủ này cấp và kiểm tra nên không cần bù, và bù thì token sống lâu hơn quy định.
+                ClockSkew = TimeSpan.Zero,
             };
         });
         services.AddAuthorization();
