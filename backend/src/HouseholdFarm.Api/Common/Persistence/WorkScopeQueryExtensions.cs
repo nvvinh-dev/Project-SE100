@@ -12,7 +12,7 @@ namespace HouseholdFarm.Api.Common.Persistence;
 /// <remarks>
 /// <para>
 /// Chủ hộ thấy cả hộ; Thành viên hộ thấy dữ liệu của mùa vụ được phân công; Nhân công chỉ thấy công việc giao cho mình và vật tư
-/// của công việc đó (BR-USR-14), còn tên cây, thửa của mùa vụ thì lấy qua công việc; Quản trị hệ thống và người chưa đăng nhập
+/// của công việc đó, và mã, vị trí thửa của mùa vụ chứa công việc đó (BR-USR-14); Quản trị hệ thống và người chưa đăng nhập
 /// không thấy gì. Lọc theo hộ đã do Global Query Filter làm, các hàm này chỉ thu hẹp thêm trong hộ.
 /// </para>
 /// <para>
@@ -22,6 +22,26 @@ namespace HouseholdFarm.Api.Common.Persistence;
 /// </remarks>
 public static class WorkScopeQueryExtensions
 {
+    /// <summary>
+    /// Thửa đất trong phạm vi: Chủ hộ, Thành viên hộ thấy mọi thửa của hộ (ma trận phân quyền, nhóm Danh mục);
+    /// Nhân công chỉ thấy thửa của mùa vụ có công việc giao cho mình, và service chỉ trả mã, vị trí (BR-USR-14).
+    /// </summary>
+    public static IQueryable<Plot> VisibleTo(this IQueryable<Plot> plots, ICurrentUser user)
+    {
+        if (!user.IsAuthenticated || user.Role == UserRole.SystemAdmin)
+        {
+            return plots.Where(_ => false);
+        }
+
+        if (IsWorker(user))
+        {
+            var userId = user.UserId;
+            return plots.Where(p => p.Seasons.Any(s => s.FarmTasks.Any(t => t.AssigneeId == userId)));
+        }
+
+        return plots;
+    }
+
     /// <summary>Mùa vụ trong phạm vi làm việc (phần sản xuất của mùa vụ).</summary>
     public static IQueryable<Season> VisibleTo(this IQueryable<Season> seasons, ICurrentUser user) =>
         SeasonIdsInScope(user) is { } ids ? seasons.Where(s => ids.Contains(s.Id)) : seasons;

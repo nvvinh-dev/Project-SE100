@@ -41,6 +41,13 @@ public static class CurrentUserPermissionExtensions
     /// <summary>Mọi người đã đăng nhập, kể cả Quản trị hệ thống (thông tin của chính mình).</summary>
     public static void EnsureAuthenticated(this ICurrentUser user) => Ensure(user, static _ => true, string.Empty);
 
+    /// <summary>
+    /// Người thuộc hộ: Chủ hộ, Thành viên hộ, Nhân công. Quản trị hệ thống bị từ chối vì không thuộc hộ nào.
+    /// Phần dữ liệu từng vai trò được thấy lọc bằng <c>VisibleTo</c>.
+    /// </summary>
+    public static void EnsureHouseholdUser(this ICurrentUser user) =>
+        Ensure(user, static u => u.Role != UserRole.SystemAdmin, "Quản trị hệ thống không xem được dữ liệu của hộ.");
+
     /// <summary>Chỉ Chủ hộ.</summary>
     public static void EnsureOwner(this ICurrentUser user) =>
         Ensure(user, static u => u.Role == UserRole.Owner, "Chỉ Chủ hộ được thực hiện thao tác này.");

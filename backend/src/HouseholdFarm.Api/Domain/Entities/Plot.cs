@@ -37,4 +37,6 @@ public class Plot : IHouseholdOwned, IAuditable, IVersioned
     public Guid? UpdatedById { get; set; }
 
     public uint Version { get; set; }
+
+    public List<Season> Seasons { get; set; } = [];
 }

@@ -11,6 +11,7 @@ using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Features.Auth;
+using HouseholdFarm.Api.Features.Plots;
 using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Sales;
@@ -35,6 +36,8 @@ builder.Services
     .AddControllers(options =>
     {
         options.Filters.Add<ValidationFilter>();
+        // Giữ hậu tố Async trong tên action để CreatedAtAction(nameof(GetAsync), ...) tìm được action theo đúng tên hàm.
+        options.SuppressAsyncSuffixInActionNames = false;
         options.Filters.Add<ResponseEnvelopeFilter>();
         // Không tự coi thuộc tính không nullable là bắt buộc: validator là nơi duy nhất báo thiếu, bằng tiếng Việt.
         options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
@@ -81,6 +84,7 @@ builder.Services.AddScoped<IProduceStockService, ProduceStockService>();
 builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IPlotService, PlotService>();
 
 var app = builder.Build();
 

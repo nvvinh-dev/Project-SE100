@@ -8,7 +8,7 @@ public class SeasonConfiguration : IEntityTypeConfiguration<Season>
 {
     public void Configure(EntityTypeBuilder<Season> builder)
     {
-        builder.HasOne(s => s.Plot).WithMany().HasForeignKey(s => s.PlotId);
+        builder.HasOne(s => s.Plot).WithMany(p => p.Seasons).HasForeignKey(s => s.PlotId);
         builder.HasOne(s => s.Crop).WithMany().HasForeignKey(s => s.CropId);
         builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(s => s.ClosedById);
         builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(s => s.CancelledById);
