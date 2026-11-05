@@ -62,6 +62,79 @@ public static class TestData
         return admin;
     }
 
+    /// <summary>Tạo một thửa đất <c>Active</c> của hộ, mã <paramref name="code"/>.</summary>
+    public static async Task<Plot> CreatePlotAsync(
+        PostgresFixture postgres,
+        TestHousehold household,
+        string code,
+        CancellationToken ct,
+        decimal areaM2 = 1000m,
+        string? locationDescription = null)
+    {
+        var plot = new Plot
+        {
+            Code = code,
+            AreaM2 = areaM2,
+            LocationDescription = locationDescription,
+            SoilType = SoilType.Alluvial,
+            WaterSource = WaterSource.RiverCanal,
+            Status = RecordStatus.Active,
+        };
+
+        await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        db.Plots.Add(plot);
+        await db.SaveChangesAsync(ct);
+        return plot;
+    }
+
+    /// <summary>
+    /// Tạo một mùa vụ trên <paramref name="plot"/> ở trạng thái <paramref name="status"/>, kèm một cây trồng mới.
+    /// Có <paramref name="taskAssignee"/> thì tạo thêm một công việc giao cho người đó.
+    /// </summary>
+    public static async Task<Season> CreateSeasonAsync(
+        PostgresFixture postgres,
+        TestHousehold household,
+        Plot plot,
+        SeasonStatus status,
+        CancellationToken ct,
+        ApplicationUser? taskAssignee = null)
+    {
+        var crop = new Crop
+        {
+            Name = $"Lúa test {Guid.CreateVersion7():N}",
+            Group = CropGroup.Staple,
+            YieldUnit = Unit.Kilogram,
+            Status = RecordStatus.Active,
+        };
+        var season = new Season
+        {
+            PlotId = plot.Id,
+            CropId = crop.Id,
+            StartDate = new DateOnly(2026, 10, 1),
+            ExpectedHarvestDate = new DateOnly(2027, 1, 15),
+            TargetYield = 5000m,
+            Status = status,
+        };
+
+        await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        db.Crops.Add(crop);
+        db.Seasons.Add(season);
+        if (taskAssignee is not null)
+        {
+            db.FarmTasks.Add(new FarmTask
+            {
+                SeasonId = season.Id,
+                AssigneeId = taskAssignee.Id,
+                Type = FarmTaskType.Watering,
+                ScheduledDate = new DateOnly(2026, 10, 5),
+                Status = FarmTaskStatus.Pending,
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        return season;
+    }
+
     /// <summary>Số điện thoại đã chuẩn hóa (10 chữ số bắt đầu bằng 0, BR-USR-01) chưa tài khoản nào dùng.</summary>
     public static string NewPhone() => $"09{Interlocked.Increment(ref _phoneSequence):D8}";
 

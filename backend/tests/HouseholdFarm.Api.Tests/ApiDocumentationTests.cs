@@ -21,7 +21,7 @@ public class ApiDocumentationTests(WebApplicationFactory<Program> factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [Fact(DisplayName = "Tài liệu OpenAPI liệt kê API đăng nhập và khai báo access token để thử API trên Swagger UI")]
+    [Fact(DisplayName = "Tài liệu OpenAPI liệt kê API đăng nhập, thửa đất và khai báo access token để thử API trên Swagger UI")]
     public async Task Development_DocumentListsAuthEndpointsAndBearerScheme()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -32,6 +32,8 @@ public class ApiDocumentationTests(WebApplicationFactory<Program> factory)
         var paths = document.GetProperty("paths");
         Assert.True(paths.TryGetProperty("/api/auth/login", out _));
         Assert.True(paths.TryGetProperty("/api/auth/me", out _));
+        Assert.True(paths.TryGetProperty("/api/plots", out _));
+        Assert.True(paths.TryGetProperty("/api/plots/{id}", out _));
         var scheme = document.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer");
         Assert.Equal("http", scheme.GetProperty("type").GetString());
         Assert.Equal("bearer", scheme.GetProperty("scheme").GetString());
