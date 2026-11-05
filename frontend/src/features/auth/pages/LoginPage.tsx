@@ -104,7 +104,10 @@ export function LoginPage() {
 
       <p className="text-center text-sm text-muted-foreground">
         Chưa có tài khoản?{" "}
-        <Link to="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+        <Link
+          to="/register"
+          className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+        >
           Đăng ký hộ mới
         </Link>
       </p>

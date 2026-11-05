@@ -173,7 +173,10 @@ export function RegisterPage() {
 
       <p className="text-center text-sm text-muted-foreground">
         Đã có tài khoản?{" "}
-        <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+        <Link
+          to="/login"
+          className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+        >
           Đăng nhập
         </Link>
       </p>

@@ -15,13 +15,14 @@ export interface RefreshLocks {
  */
 export function withRefreshLock<T>(
   task: () => Promise<T>,
-  locks: RefreshLocks | undefined = browserLocks(),
+  locks: RefreshLocks | null = browserLocks(),
 ): Promise<T> {
   return locks ? locks.request(REFRESH_LOCK_NAME, task) : task();
 }
 
 // navigator.locks chỉ có ở ngữ cảnh an toàn (HTTPS, localhost). Demo trên điện thoại qua HTTP (D-14) thì không có:
 // khi đó vẫn làm mới phiên bình thường, chỉ không chặn được hai tab làm mới cùng lúc.
-function browserLocks(): RefreshLocks | undefined {
-  return typeof navigator === "undefined" ? undefined : (navigator.locks as LockManager | undefined);
+// Trả null, không phải undefined: truyền undefined vào withRefreshLock sẽ rơi vào giá trị mặc định, không tắt được khóa.
+function browserLocks(): RefreshLocks | null {
+  return typeof navigator === "undefined" ? null : ((navigator.locks as LockManager | undefined) ?? null);
 }

@@ -1,5 +1,5 @@
 import axios, { isAxiosError, isCancel, type InternalAxiosRequestConfig } from "axios";
-import { type ApiError, toApiError } from "@/lib/api-error";
+import { ApiError, toApiError } from "@/lib/api-error";
 import { withRefreshLock } from "@/lib/auth/refresh-lock";
 import { getAccessToken, setAccessToken } from "@/lib/auth/token-store";
 import type { AccessTokenResponse } from "@/lib/auth/types";
@@ -58,6 +58,9 @@ export function setSessionEndedHandler(handler: ((error?: ApiError) => void) | n
  * Lấy access token mới bằng cookie refresh token (FR-AUTH-03). Nhiều yêu cầu cùng lúc dùng chung một lần làm mới,
  * các tab làm mới lần lượt: mỗi refresh token chỉ dùng được một lần, gửi lại token vừa bị thay thì backend thu hồi
  * mọi phiên (BR-USR-05).
+ *
+ * Trả `true` khi có access token mới, `false` khi phiên đã hết (`INVALID_REFRESH_TOKEN`). Lỗi khác (mất mạng, máy chủ
+ * lỗi) ném ra `ApiError`: refresh token có thể vẫn còn hạn nên không kết thúc phiên.
  */
 export function refreshAccessToken(): Promise<boolean> {
   refreshing ??= withRefreshLock(() => apiClient.post<ResponseEnvelope<AccessTokenResponse>>("/auth/refresh"))
@@ -65,9 +68,13 @@ export function refreshAccessToken(): Promise<boolean> {
       setAccessToken(response.data.data.accessToken);
       return true;
     })
-    .catch(() => {
-      setAccessToken(null);
-      return false;
+    .catch((error: unknown) => {
+      // UC-AUTH-02 A1a, A2a: chỉ refresh token hết hạn hoặc bị thu hồi mới là phiên đã hết.
+      if (error instanceof ApiError && error.code === "INVALID_REFRESH_TOKEN") {
+        setAccessToken(null);
+        return false;
+      }
+      throw error;
     })
     .finally(() => {
       refreshing = null;
@@ -95,9 +102,19 @@ apiClient.interceptors.response.use(undefined, async (error: unknown) => {
 
   if (usesSession && apiError.code === "UNAUTHENTICATED") {
     // FR-AUTH-03: access token hết hạn khi đang thao tác thì làm mới phiên rồi gửi lại, không đưa ra trang đăng nhập.
-    if (!config.retriedAfterRefresh && (await refreshAccessToken())) {
-      config.retriedAfterRefresh = true;
-      return apiClient(config);
+    if (!config.retriedAfterRefresh) {
+      let refreshed: boolean;
+      try {
+        refreshed = await refreshAccessToken();
+      } catch (refreshError) {
+        // Mất mạng, máy chủ lỗi khi làm mới: trả lỗi đó cho yêu cầu đang gọi, người dùng ở lại trang, form giữ dữ liệu.
+        return Promise.reject(refreshError);
+      }
+
+      if (refreshed) {
+        config.retriedAfterRefresh = true;
+        return apiClient(config);
+      }
     }
     onSessionEnded?.();
   } else if (usesSession && apiError.code === "ACCOUNT_LOCKED") {

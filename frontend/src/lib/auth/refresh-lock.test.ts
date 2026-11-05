@@ -61,6 +61,6 @@ describe("withRefreshLock", () => {
   });
 
   it("không có navigator.locks thì chạy thẳng", async () => {
-    expect(await withRefreshLock(() => Promise.resolve("ok"), undefined)).toBe("ok");
+    expect(await withRefreshLock(() => Promise.resolve("ok"), null)).toBe("ok");
   });
 });
