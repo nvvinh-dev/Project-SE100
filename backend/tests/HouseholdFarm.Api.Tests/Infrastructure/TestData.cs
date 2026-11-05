@@ -135,10 +135,12 @@ public static class TestData
         return season;
     }
 
+    /// <summary>Số điện thoại đã chuẩn hóa (10 chữ số bắt đầu bằng 0, BR-USR-01) chưa tài khoản nào dùng.</summary>
+    public static string NewPhone() => $"09{Interlocked.Increment(ref _phoneSequence):D8}";
+
     private static ApplicationUser NewUser(Guid? householdId, UserRole role, string fullName)
     {
-        // Số điện thoại đã chuẩn hóa: 10 chữ số bắt đầu bằng 0 (BR-USR-01).
-        var phone = $"09{Interlocked.Increment(ref _phoneSequence):D8}";
+        var phone = NewPhone();
         return new ApplicationUser
         {
             HouseholdId = householdId,
