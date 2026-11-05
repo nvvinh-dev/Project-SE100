@@ -23,11 +23,13 @@ public static class AuthServiceCollectionExtensions
             options.Lockout.MaxFailedAccessAttempts = configuration.GetValue<int>("Auth:LockoutMaxFailedAttempts");
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(configuration.GetValue<int>("Auth:LockoutMinutes"));
             options.Lockout.AllowedForNewUsers = true;
+            PasswordPolicy.Apply(options.Password);
         });
 
         services.AddSingleton<JwtSettings>();
         services.AddSingleton<AccessTokenIssuer>();
         services.AddSingleton<RefreshTokenCookie>();
+        services.AddScoped<RefreshTokenRevoker>();
 
         services.AddScoped<CurrentUser>();
         services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
