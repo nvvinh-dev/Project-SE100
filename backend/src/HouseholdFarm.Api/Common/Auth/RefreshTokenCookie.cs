@@ -11,15 +11,28 @@ public sealed class RefreshTokenCookie(IConfiguration configuration)
     /// <summary>Đường dẫn của cookie; trình duyệt chỉ gửi cookie kèm yêu cầu dưới đường dẫn này.</summary>
     public const string Path = "/api/auth";
 
-    public void Write(HttpResponse response, string token, DateTime expiresAt) =>
-        response.Cookies.Append(Name, token, new CookieOptions
-        {
-            HttpOnly = true,
-            SameSite = SameSiteMode.Strict,
-            Path = Path,
-            // Tắt được bằng cấu hình chỉ khi demo trên điện thoại thật qua HTTP (D-14).
-            Secure = configuration.GetValue("Auth:RefreshCookieSecure", defaultValue: true),
-            // Có hạn để cookie còn sau khi đóng trình duyệt: mở lại ứng dụng trong hạn phiên không phải đăng nhập lại (FR-AUTH-03).
-            Expires = expiresAt,
-        });
+    /// <summary>Refresh token trình duyệt gửi kèm, hoặc <c>null</c> khi không có cookie.</summary>
+    public static string? Read(HttpRequest request) =>
+        request.Cookies.TryGetValue(Name, out var token) && !string.IsNullOrEmpty(token) ? token : null;
+
+    public void Write(HttpResponse response, string token, DateTime expiresAt)
+    {
+        var options = CreateOptions();
+        // Có hạn để cookie còn sau khi đóng trình duyệt: mở lại ứng dụng trong hạn phiên không phải đăng nhập lại (FR-AUTH-03).
+        options.Expires = expiresAt;
+        response.Cookies.Append(Name, token, options);
+    }
+
+    /// <summary>Xóa cookie khi phiên kết thúc (đăng xuất, đổi mật khẩu).</summary>
+    // Trình duyệt chỉ xóa cookie khi đường dẫn và các thuộc tính khớp với lúc đặt.
+    public void Delete(HttpResponse response) => response.Cookies.Delete(Name, CreateOptions());
+
+    private CookieOptions CreateOptions() => new()
+    {
+        HttpOnly = true,
+        SameSite = SameSiteMode.Strict,
+        Path = Path,
+        // Tắt được bằng cấu hình chỉ khi demo trên điện thoại thật qua HTTP (D-14).
+        Secure = configuration.GetValue("Auth:RefreshCookieSecure", defaultValue: true),
+    };
 }
