@@ -38,6 +38,9 @@ public static class CurrentUserPermissionExtensions
         };
     }
 
+    /// <summary>Mọi người đã đăng nhập, kể cả Quản trị hệ thống (thông tin của chính mình).</summary>
+    public static void EnsureAuthenticated(this ICurrentUser user) => Ensure(user, static _ => true, string.Empty);
+
     /// <summary>Chỉ Chủ hộ.</summary>
     public static void EnsureOwner(this ICurrentUser user) =>
         Ensure(user, static u => u.Role == UserRole.Owner, "Chỉ Chủ hộ được thực hiện thao tác này.");
@@ -75,7 +78,7 @@ public static class CurrentUserPermissionExtensions
     {
         if (!user.IsAuthenticated)
         {
-            throw new AppException(ErrorCodes.Unauthenticated, "Bạn cần đăng nhập để thực hiện thao tác này.");
+            throw new AppException(ErrorCodes.Unauthenticated, "Cần đăng nhập để thực hiện thao tác này.");
         }
 
         if (!isAllowed(user))
