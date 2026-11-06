@@ -96,4 +96,23 @@ public record StockTransactionResponse(
     DateOnly TransactionDate,
     decimal Quantity,
     decimal UnitCost,
-    decimal TotalCost);
+    decimal TotalCost,
+    string? Reason,
+    string? Note,
+    DateTime? VoidedAt,
+    uint Version);
+
+/// <summary>Tạo giao dịch kho; trường cần có tùy theo <paramref name="Type"/>.</summary>
+/// <param name="Quantity">Lượng nhập, lớn hơn 0.</param>
+/// <param name="UnitCost">Giá nhập thực tế, bắt buộc với <c>In</c>.</param>
+/// <param name="RequestId">Sinh một lần khi mở form, chống tạo trùng khi gửi lại (BR-GEN-10).</param>
+public sealed record CreateStockTransactionRequest(
+    StockTransactionType? Type,
+    Guid SupplyId,
+    decimal Quantity,
+    decimal? UnitCost,
+    DateOnly? TransactionDate,
+    Guid? SeasonId,
+    string? Reason,
+    string? Note,
+    Guid RequestId);
