@@ -18,5 +18,9 @@ public sealed class SeasonsController(ISeasonService seasonService) : Controller
         var season = await seasonService.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetAsync), new { id = season.Id }, season);
     }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<SeasonResponse>> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct) =>
+        Ok(await seasonService.UpdateAsync(id, request, ct));
 }
 

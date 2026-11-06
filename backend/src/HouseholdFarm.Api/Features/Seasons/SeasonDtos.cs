@@ -67,6 +67,23 @@ public sealed record CreateSeasonRequest(
     decimal TargetYield);
 
 /// <summary>
+/// Yêu cầu sửa mùa vụ (FR-SEA-07, BR-GEN-11).
+/// </summary>
+/// <param name="PlotId">Thửa đất của mùa vụ.</param>
+/// <param name="CropId">Cây trồng của mùa vụ.</param>
+/// <param name="StartDate">Ngày bắt đầu mùa vụ.</param>
+/// <param name="ExpectedHarvestDate">Ngày dự kiến thu hoạch (lớn hơn hoặc bằng ngày bắt đầu, BR-SEA-01).</param>
+/// <param name="TargetYield">Mục tiêu sản lượng (lớn hơn 0, BR-SEA-01).</param>
+/// <param name="Version">Phiên bản dữ liệu hiện tại để kiểm soát xung đột đồng thời (BR-GEN-11).</param>
+public sealed record UpdateSeasonRequest(
+    Guid PlotId,
+    Guid CropId,
+    DateOnly StartDate,
+    DateOnly ExpectedHarvestDate,
+    decimal TargetYield,
+    uint Version);
+
+/// <summary>
 /// Thông tin mùa vụ trả về khi tạo hoặc xem chi tiết cơ bản (FR-SEA-01).
 /// </summary>
 public sealed record SeasonResponse(

@@ -4,6 +4,8 @@ public interface ISeasonService
 {
     Task<SeasonResponse> CreateAsync(CreateSeasonRequest request, CancellationToken ct);
 
+    Task<SeasonResponse> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct);
+
     Task<SeasonResponse> GetAsync(Guid id, CancellationToken ct);
 
     /// <summary>

@@ -49,6 +49,78 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
             season.Version);
     }
 
+    public async Task<SeasonResponse> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct)
+    {
+        // Ma trận phân quyền: chỉ Chủ hộ có quyền sửa mùa vụ
+        currentUser.EnsureOwner();
+
+        var season = await db.Seasons
+            .VisibleTo(currentUser)
+            .Include(s => s.Plot)
+            .Include(s => s.Crop)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw AppException.NotFound("mùa vụ");
+
+        // BR-SEA-10: Kiểm tra trạng thái theo bảng quy tắc trạng thái
+        if (season.Status is SeasonStatus.Closed or SeasonStatus.Cancelled)
+        {
+            throw new AppException(ErrorCodes.SeasonInvalidState, "Không thể sửa mùa vụ đã chốt hoặc đã hủy.");
+        }
+
+        if (season.Status == SeasonStatus.InProgress && (request.PlotId != season.PlotId || request.CropId != season.CropId))
+        {
+            throw new AppException(
+                ErrorCodes.SeasonInvalidState,
+                "Mùa vụ đang canh tác chỉ được sửa ngày và mục tiêu sản lượng, không được đổi thửa đất hoặc cây trồng.");
+        }
+
+        var plotChanged = request.PlotId != season.PlotId;
+        var dateChanged = request.StartDate != season.StartDate || request.ExpectedHarvestDate != season.ExpectedHarvestDate;
+
+        // BR-SEA-01, BR-GEN-13: Khi đổi thửa hoặc đổi cây, thửa/cây mới phải Active
+        if (plotChanged)
+        {
+            var newPlot = await EnsurePlotActiveAsync(request.PlotId, ct);
+            season.PlotId = newPlot.Id;
+            season.Plot = newPlot;
+        }
+
+        if (request.CropId != season.CropId)
+        {
+            var newCrop = await EnsureCropActiveAsync(request.CropId, ct);
+            season.CropId = newCrop.Id;
+            season.Crop = newCrop;
+        }
+
+        // BR-SEA-02: Kiểm tra chồng lấn kế hoạch khi đổi ngày hoặc thửa (bỏ qua chính mùa vụ đang sửa)
+        if (plotChanged || dateChanged)
+        {
+            await EnsureNoPlannedOverlapAsync(request.PlotId, request.StartDate, request.ExpectedHarvestDate, excludeSeasonId: season.Id, ct);
+        }
+
+        season.StartDate = request.StartDate;
+        season.ExpectedHarvestDate = request.ExpectedHarvestDate;
+        season.TargetYield = request.TargetYield;
+
+        // BR-GEN-11: Kiểm soát xung đột phiên bản
+        db.Entry(season).Property(s => s.Version).OriginalValue = request.Version;
+
+        await db.SaveChangesAsync(ct);
+
+        return new SeasonResponse(
+            season.Id,
+            season.Plot.Id,
+            season.Plot.Code,
+            season.Crop.Id,
+            season.Crop.Name,
+            season.Crop.YieldUnit,
+            season.StartDate,
+            season.ExpectedHarvestDate,
+            season.TargetYield,
+            season.Status,
+            season.Version);
+    }
+
     private async Task<Plot> EnsurePlotActiveAsync(Guid plotId, CancellationToken ct)
     {
         var plot = await db.Plots
