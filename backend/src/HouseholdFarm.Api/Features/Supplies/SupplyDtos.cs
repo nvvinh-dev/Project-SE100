@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using HouseholdFarm.Api.Common.Responses;
+using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Features.Supplies;
@@ -100,11 +101,72 @@ public record StockTransactionResponse(
     string? Reason,
     string? Note,
     DateTime? VoidedAt,
-    uint Version);
+    uint Version)
+{
+    internal static StockTransactionResponse From(StockTransaction t) => new(
+        t.Id,
+        t.SupplyId,
+        t.Type,
+        t.SeasonId,
+        t.TransactionDate,
+        t.Quantity,
+        t.UnitCost,
+        t.TotalCost,
+        t.Reason,
+        t.Note,
+        t.VoidedAt,
+        t.Version);
+}
+
+/// <summary>Một dòng của lịch sử giao dịch kho.</summary>
+/// <param name="Quantity">Có dấu như trong database.</param>
+/// <param name="IsFromFarmTask">Giao dịch xuất sinh từ công việc, chỉ hủy được qua công việc (BR-TSK-11).</param>
+public sealed record StockTransactionListItem(
+    Guid Id,
+    DateOnly TransactionDate,
+    Guid SupplyId,
+    string SupplyCode,
+    string SupplyName,
+    Unit Unit,
+    StockTransactionType Type,
+    decimal Quantity,
+    decimal UnitCost,
+    decimal TotalCost,
+    Guid? SeasonId,
+    string? CropName,
+    string? PlotCode,
+    DateOnly? SeasonStartDate,
+    string? Reason,
+    string? Note,
+    DateTime? VoidedAt,
+    string? VoidReason,
+    bool IsFromFarmTask);
+
+/// <summary>Tham số của lịch sử giao dịch kho; <c>from</c>, <c>to</c> lọc theo ngày giao dịch.</summary>
+public sealed record StockTransactionQuery : PageQuery
+{
+    public Guid? SupplyId { get; init; }
+
+    public StockTransactionType? Type { get; init; }
+
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+
+    public Guid? SeasonId { get; init; }
+
+    /// <summary><c>true</c>: gồm cả giao dịch đã hủy.</summary>
+    public bool? IncludeVoided { get; init; }
+}
+
+/// <summary>Hủy giao dịch kho, bắt buộc lý do (BR-GEN-06).</summary>
+public sealed record VoidStockTransactionRequest(string Reason);
 
 /// <summary>Tạo giao dịch kho; trường cần có tùy theo <paramref name="Type"/>.</summary>
-/// <param name="Quantity">Lượng nhập, lớn hơn 0.</param>
-/// <param name="UnitCost">Giá nhập thực tế, bắt buộc với <c>In</c>.</param>
+/// <param name="Quantity"><c>In</c>, <c>Out</c>: số dương. <c>Adjustment</c>: có dấu, tăng dương, giảm âm.</param>
+/// <param name="UnitCost">Giá nhập thực tế, bắt buộc với <c>In</c>; loại khác lấy giá vốn bình quân hiện tại.</param>
+/// <param name="SeasonId">Bắt buộc với <c>Out</c>, để trống với loại khác.</param>
+/// <param name="Reason">Bắt buộc với <c>Adjustment</c>.</param>
 /// <param name="RequestId">Sinh một lần khi mở form, chống tạo trùng khi gửi lại (BR-GEN-10).</param>
 public sealed record CreateStockTransactionRequest(
     StockTransactionType? Type,

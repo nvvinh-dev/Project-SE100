@@ -88,6 +88,7 @@ builder.Services.AddScoped<IPlotService, PlotService>();
 builder.Services.AddScoped<ISeasonService, SeasonService>();
 builder.Services.AddScoped<ISupplyService, SupplyService>();
 builder.Services.AddScoped<StockLedger>();
+builder.Services.AddScoped<StockOperations>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 
 var app = builder.Build();
