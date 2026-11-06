@@ -15,16 +15,9 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
         // Ma trận phân quyền: chỉ Chủ hộ có quyền tạo mùa vụ
         currentUser.EnsureOwner();
 
-        // BR-GEN-02: thửa và cây của hộ khác hoặc không tồn tại trả NotFound
-        var plot = await db.Plots
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == request.PlotId, ct)
-            ?? throw AppException.NotFound("thửa đất");
-
-        var crop = await db.Crops
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == request.CropId, ct)
-            ?? throw AppException.NotFound("cây trồng");
+        // BR-SEA-01, BR-GEN-13: Thửa đất và cây trồng phải tồn tại trong hộ và đang ở trạng thái Active
+        var plot = await EnsurePlotActiveAsync(request.PlotId, ct);
+        var crop = await EnsureCropActiveAsync(request.CropId, ct);
 
         var season = new Season
         {
@@ -51,6 +44,44 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
             season.TargetYield,
             season.Status,
             season.Version);
+    }
+
+    private async Task<Plot> EnsurePlotActiveAsync(Guid plotId, CancellationToken ct)
+    {
+        var plot = await db.Plots
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == plotId, ct)
+            ?? throw AppException.NotFound("thửa đất");
+
+        // BR-SEA-01, BR-GEN-13: Thửa đất phải ở trạng thái Active khi chọn cho mùa vụ
+        if (plot.Status != RecordStatus.Active)
+        {
+            throw new AppException(
+                ErrorCodes.CatalogInactive,
+                $"Thửa đất '{plot.Code}' đang ngừng sử dụng, không thể chọn cho mùa vụ.",
+                new { plotId = plot.Id, plotCode = plot.Code });
+        }
+
+        return plot;
+    }
+
+    private async Task<Crop> EnsureCropActiveAsync(Guid cropId, CancellationToken ct)
+    {
+        var crop = await db.Crops
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == cropId, ct)
+            ?? throw AppException.NotFound("cây trồng");
+
+        // BR-SEA-01, BR-GEN-13: Cây trồng phải ở trạng thái Active khi chọn cho mùa vụ
+        if (crop.Status != RecordStatus.Active)
+        {
+            throw new AppException(
+                ErrorCodes.CatalogInactive,
+                $"Cây trồng '{crop.Name}' đang ngừng sử dụng, không thể chọn cho mùa vụ.",
+                new { cropId = crop.Id, cropName = crop.Name });
+        }
+
+        return crop;
     }
 
     public async Task<SeasonResponse> GetAsync(Guid id, CancellationToken ct)

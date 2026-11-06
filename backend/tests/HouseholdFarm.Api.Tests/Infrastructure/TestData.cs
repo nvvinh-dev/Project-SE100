@@ -69,7 +69,8 @@ public static class TestData
         string code,
         CancellationToken ct,
         decimal areaM2 = 1000m,
-        string? locationDescription = null)
+        string? locationDescription = null,
+        RecordStatus status = RecordStatus.Active)
     {
         var plot = new Plot
         {
@@ -78,7 +79,7 @@ public static class TestData
             LocationDescription = locationDescription,
             SoilType = SoilType.Alluvial,
             WaterSource = WaterSource.RiverCanal,
-            Status = RecordStatus.Active,
+            Status = status,
         };
 
         await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));

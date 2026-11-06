@@ -59,6 +59,50 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Planned", getData.GetProperty("status").GetString());
     }
 
+    [Fact(DisplayName = "BR-SEA-01, BR-GEN-13: chọn thửa đất đang ngừng sử dụng (Inactive) trả CATALOG_INACTIVE")]
+    public async Task Create_PlotInactive_ReturnsCatalogInactive()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct, status: RecordStatus.Inactive);
+        var crop = await TestData.CreateCropAsync(factory.Postgres, household, "Lúa ST25", ct, status: RecordStatus.Active);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        var request = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 11, 1),
+            ExpectedHarvestDate: new DateOnly(2027, 2, 1),
+            TargetYield: 3000m);
+
+        var response = await client.PostAsJsonAsync(SeasonsPath, request, ct);
+        var body = await response.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.CatalogInactive, ct);
+        Assert.Contains("TD001", body.GetProperty("detail").GetString());
+    }
+
+    [Fact(DisplayName = "BR-SEA-01, BR-GEN-13: chọn cây trồng đang ngừng sử dụng (Inactive) trả CATALOG_INACTIVE")]
+    public async Task Create_CropInactive_ReturnsCatalogInactive()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct, status: RecordStatus.Active);
+        var crop = await TestData.CreateCropAsync(factory.Postgres, household, "Lúa ST25", ct, status: RecordStatus.Inactive);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        var request = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 11, 1),
+            ExpectedHarvestDate: new DateOnly(2027, 2, 1),
+            TargetYield: 3000m);
+
+        var response = await client.PostAsJsonAsync(SeasonsPath, request, ct);
+        var body = await response.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.CatalogInactive, ct);
+        Assert.Contains("Lúa ST25", body.GetProperty("detail").GetString());
+    }
+
     [Fact(DisplayName = "BR-SEA-01: ngày dự kiến thu hoạch trước ngày bắt đầu trả VALIDATION_ERROR")]
     public async Task Create_ExpectedHarvestDateBeforeStartDate_ReturnsValidationError()
     {
