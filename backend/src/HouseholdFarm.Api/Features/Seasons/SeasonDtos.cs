@@ -52,6 +52,37 @@ public enum SeasonOperation
 }
 
 /// <summary>
+/// Yêu cầu tạo mùa vụ mới (FR-SEA-01). Mùa vụ mới luôn ở trạng thái Planned.
+/// </summary>
+/// <param name="PlotId">Thửa đất của mùa vụ.</param>
+/// <param name="CropId">Cây trồng của mùa vụ.</param>
+/// <param name="StartDate">Ngày bắt đầu mùa vụ.</param>
+/// <param name="ExpectedHarvestDate">Ngày dự kiến thu hoạch (lớn hơn hoặc bằng ngày bắt đầu, BR-SEA-01).</param>
+/// <param name="TargetYield">Mục tiêu sản lượng (lớn hơn 0, theo đơn vị của cây trồng, BR-SEA-01).</param>
+public sealed record CreateSeasonRequest(
+    Guid PlotId,
+    Guid CropId,
+    DateOnly StartDate,
+    DateOnly ExpectedHarvestDate,
+    decimal TargetYield);
+
+/// <summary>
+/// Thông tin mùa vụ trả về khi tạo hoặc xem chi tiết cơ bản (FR-SEA-01).
+/// </summary>
+public sealed record SeasonResponse(
+    Guid Id,
+    Guid PlotId,
+    string PlotCode,
+    Guid CropId,
+    string CropName,
+    Unit YieldUnit,
+    DateOnly StartDate,
+    DateOnly ExpectedHarvestDate,
+    decimal TargetYield,
+    SeasonStatus Status,
+    uint Version);
+
+/// <summary>
 /// Thông tin trạng thái và ngày của mùa vụ do <see cref="ISeasonStateGuard"/> trả về.
 /// Bên gọi (như Sales, Supplies) có thể sử dụng <c>StartDate</c> để kiểm tra ngày giao dịch không trước ngày bắt đầu mùa vụ (BR-SAL-01).
 /// </summary>

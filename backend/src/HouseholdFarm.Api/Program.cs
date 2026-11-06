@@ -85,6 +85,7 @@ builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPlotService, PlotService>();
+builder.Services.AddScoped<ISeasonService, SeasonService>();
 
 var app = builder.Build();
 
