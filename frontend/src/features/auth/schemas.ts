@@ -8,6 +8,19 @@ const phoneSchema = z
   .min(1, { error: "Vui lòng nhập số điện thoại.", abort: true })
   .refine((phone) => normalizePhone(phone) !== null, { error: PHONE_INVALID_MESSAGE });
 
+const fullNameSchema = z
+  .string()
+  .trim()
+  .min(1, { error: "Vui lòng nhập họ tên." })
+  .max(200, { error: "Họ tên tối đa 200 ký tự." });
+
+// D-22: tối thiểu 8 ký tự, có ít nhất 1 chữ cái và 1 chữ số.
+const newPasswordSchema = z
+  .string()
+  .min(8, { error: "Mật khẩu phải có ít nhất 8 ký tự." })
+  .regex(/\p{L}/u, { error: "Mật khẩu phải có ít nhất 1 chữ cái." })
+  .regex(/[0-9]/, { error: "Mật khẩu phải có ít nhất 1 chữ số." });
+
 export const loginSchema = z.object({
   phone: phoneSchema,
   password: z.string().min(1, { error: "Vui lòng nhập mật khẩu." }),
@@ -16,18 +29,9 @@ export const loginSchema = z.object({
 export type LoginFormValues = z.infer<typeof loginSchema>;
 
 export const registerSchema = z.object({
-  fullName: z
-    .string()
-    .trim()
-    .min(1, { error: "Vui lòng nhập họ tên." })
-    .max(200, { error: "Họ tên tối đa 200 ký tự." }),
+  fullName: fullNameSchema,
   phone: phoneSchema,
-  // D-22: tối thiểu 8 ký tự, có ít nhất 1 chữ cái và 1 chữ số.
-  password: z
-    .string()
-    .min(8, { error: "Mật khẩu phải có ít nhất 8 ký tự." })
-    .regex(/\p{L}/u, { error: "Mật khẩu phải có ít nhất 1 chữ cái." })
-    .regex(/[0-9]/, { error: "Mật khẩu phải có ít nhất 1 chữ số." }),
+  password: newPasswordSchema,
   householdName: z
     .string()
     .trim()
@@ -38,3 +42,17 @@ export const registerSchema = z.object({
 });
 
 export type RegisterFormValues = z.infer<typeof registerSchema>;
+
+export const profileSchema = z.object({
+  fullName: fullNameSchema,
+  phone: phoneSchema,
+});
+
+export type ProfileFormValues = z.infer<typeof profileSchema>;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, { error: "Vui lòng nhập mật khẩu hiện tại." }),
+  newPassword: newPasswordSchema,
+});
+
+export type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
