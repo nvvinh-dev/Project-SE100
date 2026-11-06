@@ -1,7 +1,13 @@
+using HouseholdFarm.Api.Common.Responses;
+
 namespace HouseholdFarm.Api.Features.Seasons;
 
 public interface ISeasonService
 {
+    Task<PagedResult<SeasonListItem>> GetListAsync(SeasonQuery query, CancellationToken ct);
+
+    Task<IReadOnlyList<SeasonOptionItem>> GetOptionsAsync(SeasonOptionQuery query, CancellationToken ct);
+
     Task<SeasonResponse> CreateAsync(CreateSeasonRequest request, CancellationToken ct);
 
     Task<SeasonResponse> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct);

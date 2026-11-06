@@ -1,3 +1,4 @@
+using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Features.Seasons;
@@ -116,5 +117,59 @@ public record SeasonStateResponse(
     DateOnly ExpectedHarvestDate,
     Guid PlotId,
     Guid CropId);
+
+/// <summary>
+/// Một dòng trong danh sách mùa vụ (FR-SEA-11).
+/// </summary>
+public sealed record SeasonListItem(
+    Guid Id,
+    Guid PlotId,
+    string PlotCode,
+    Guid CropId,
+    string CropName,
+    Unit YieldUnit,
+    DateOnly StartDate,
+    DateOnly ExpectedHarvestDate,
+    decimal TargetYield,
+    SeasonStatus Status);
+
+/// <summary>
+/// Tham số truy vấn danh sách mùa vụ (FR-SEA-11).
+/// </summary>
+public sealed record SeasonQuery : PageQuery
+{
+    public static readonly IReadOnlyList<string> SortFields = ["startDate", "expectedHarvestDate", "targetYield", "createdAt"];
+
+    public Guid? PlotId { get; init; }
+
+    public Guid? CropId { get; init; }
+
+    public SeasonStatus? Status { get; init; }
+
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+}
+
+/// <summary>
+/// Tham số truy vấn ô chọn mùa vụ theo loại thao tác (FR-SEA-11).
+/// </summary>
+public sealed record SeasonOptionQuery(SeasonOperation? Operation);
+
+/// <summary>
+/// Mục lựa chọn mùa vụ cho component SeasonSelect dùng chung (FR-SEA-11).
+/// </summary>
+public sealed record SeasonOptionItem(
+    Guid Id,
+    string Label,
+    SeasonStatus Status,
+    Guid PlotId,
+    string PlotCode,
+    Guid CropId,
+    string CropName,
+    Unit YieldUnit,
+    DateOnly StartDate,
+    DateOnly ExpectedHarvestDate);
+
 
 

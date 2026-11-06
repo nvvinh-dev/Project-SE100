@@ -69,3 +69,40 @@ public sealed class UpdateSeasonRequestValidator : AbstractValidator<UpdateSeaso
     }
 }
 
+/// <summary>
+/// Kiểm tra tham số truy vấn danh sách mùa vụ (FR-SEA-11).
+/// </summary>
+public sealed class SeasonQueryValidator : AbstractValidator<SeasonQuery>
+{
+    public SeasonQueryValidator()
+    {
+        RuleFor(q => q.Sort)
+            .Must(sort => sort is null || SeasonQuery.SortFields.Contains(sort.TrimStart('-')))
+            .WithMessage($"Chỉ sắp xếp được theo: {string.Join(", ", SeasonQuery.SortFields)}.");
+
+        RuleFor(q => q.Status)
+            .IsInEnum().WithMessage("Trạng thái mùa vụ không hợp lệ.");
+
+        When(q => q.From.HasValue && q.To.HasValue, () =>
+        {
+            RuleFor(q => q.To)
+                .GreaterThanOrEqualTo(q => q.From)
+                .WithMessage("Ngày kết thúc lọc phải lớn hơn hoặc bằng ngày bắt đầu lọc.");
+        });
+    }
+}
+
+/// <summary>
+/// Kiểm tra tham số truy vấn ô chọn mùa vụ (FR-SEA-11).
+/// </summary>
+public sealed class SeasonOptionQueryValidator : AbstractValidator<SeasonOptionQuery>
+{
+    public SeasonOptionQueryValidator()
+    {
+        RuleFor(q => q.Operation)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Vui lòng chọn loại thao tác.")
+            .IsInEnum().WithMessage("Loại thao tác không hợp lệ.");
+    }
+}
+

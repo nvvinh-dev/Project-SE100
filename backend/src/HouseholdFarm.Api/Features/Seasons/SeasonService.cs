@@ -1,6 +1,7 @@
 using HouseholdFarm.Api.Common.Auth;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Common.Persistence;
+using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
@@ -10,6 +11,125 @@ namespace HouseholdFarm.Api.Features.Seasons;
 
 public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : ISeasonService
 {
+    public async Task<PagedResult<SeasonListItem>> GetListAsync(SeasonQuery query, CancellationToken ct)
+    {
+        // Ma trận phân quyền: Nhân công không được xem danh sách mùa vụ
+        currentUser.EnsureNotWorker();
+
+        // Lọc theo phạm vi làm việc của người dùng (Chủ hộ thấy cả hộ, Thành viên chỉ thấy mùa vụ được phân công)
+        var seasons = db.Seasons.AsNoTracking().VisibleTo(currentUser);
+
+        if (query.PlotId.HasValue)
+        {
+            seasons = seasons.Where(s => s.PlotId == query.PlotId.Value);
+        }
+
+        if (query.CropId.HasValue)
+        {
+            seasons = seasons.Where(s => s.CropId == query.CropId.Value);
+        }
+
+        if (query.Status.HasValue)
+        {
+            seasons = seasons.Where(s => s.Status == query.Status.Value);
+        }
+
+        // Lọc các mùa vụ có khoảng [StartDate, ExpectedHarvestDate] giao với [From, To]
+        if (query.From.HasValue)
+        {
+            seasons = seasons.Where(s => s.ExpectedHarvestDate >= query.From.Value);
+        }
+
+        if (query.To.HasValue)
+        {
+            seasons = seasons.Where(s => s.StartDate <= query.To.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var pattern = SearchPatterns.Contains(query.Search);
+            seasons = seasons.Where(s =>
+                EF.Functions.ILike(s.Plot.Code, pattern, SearchPatterns.EscapeCharacter)
+                || EF.Functions.ILike(s.Crop.Name, pattern, SearchPatterns.EscapeCharacter));
+        }
+
+        return await Sort(seasons, query.Sort)
+            .ThenBy(s => s.Id)
+            .Select(s => new SeasonListItem(
+                s.Id,
+                s.PlotId,
+                s.Plot.Code,
+                s.CropId,
+                s.Crop.Name,
+                s.Crop.YieldUnit,
+                s.StartDate,
+                s.ExpectedHarvestDate,
+                s.TargetYield,
+                s.Status))
+            .ToPagedResultAsync(query, ct);
+    }
+
+    public async Task<IReadOnlyList<SeasonOptionItem>> GetOptionsAsync(SeasonOptionQuery query, CancellationToken ct)
+    {
+        // Ma trận phân quyền: Nhân công không được xem danh sách mùa vụ
+        currentUser.EnsureNotWorker();
+
+        if (query.Operation is null)
+        {
+            throw new AppException(ErrorCodes.ValidationError, "Vui lòng chọn loại thao tác.");
+        }
+
+        var (allowedStatuses, outOfScopePermission) = SeasonStateRules.GetRule(query.Operation.Value);
+
+        // BR-USR-13: Thành viên có quyền Kho hoặc TC thấy thêm mùa vụ ngoài phân công khi thực hiện thao tác tương ứng
+        var seasons = db.Seasons.AsNoTracking();
+        seasons = outOfScopePermission.HasValue
+            ? seasons.VisibleTo(currentUser, outOfScopePermission.Value)
+            : seasons.VisibleTo(currentUser);
+
+        // Lọc theo các trạng thái được phép thao tác theo BR-SEA-10
+        var items = await seasons
+            .Where(s => allowedStatuses.Contains(s.Status))
+            .OrderByDescending(s => s.StartDate)
+            .ThenBy(s => s.Id)
+            .Select(s => new
+            {
+                s.Id,
+                s.Status,
+                s.PlotId,
+                PlotCode = s.Plot.Code,
+                s.CropId,
+                CropName = s.Crop.Name,
+                s.Crop.YieldUnit,
+                s.StartDate,
+                s.ExpectedHarvestDate,
+            })
+            .ToListAsync(ct);
+
+        return items.Select(s => new SeasonOptionItem(
+            s.Id,
+            $"{s.CropName} · {s.PlotCode} · {s.StartDate:dd/MM/yyyy}",
+            s.Status,
+            s.PlotId,
+            s.PlotCode,
+            s.CropId,
+            s.CropName,
+            s.YieldUnit,
+            s.StartDate,
+            s.ExpectedHarvestDate)).ToList();
+    }
+
+    private static IOrderedQueryable<Season> Sort(IQueryable<Season> seasons, string? sort)
+    {
+        var descending = sort?.StartsWith('-') == true;
+        return sort?.TrimStart('-') switch
+        {
+            "expectedHarvestDate" => descending ? seasons.OrderByDescending(s => s.ExpectedHarvestDate) : seasons.OrderBy(s => s.ExpectedHarvestDate),
+            "targetYield" => descending ? seasons.OrderByDescending(s => s.TargetYield) : seasons.OrderBy(s => s.TargetYield),
+            "createdAt" => descending ? seasons.OrderByDescending(s => s.CreatedAt) : seasons.OrderBy(s => s.CreatedAt),
+            _ => (sort is null || descending) ? seasons.OrderByDescending(s => s.StartDate) : seasons.OrderBy(s => s.StartDate),
+        };
+    }
     public async Task<SeasonResponse> CreateAsync(CreateSeasonRequest request, CancellationToken ct)
     {
         // Ma trận phân quyền: chỉ Chủ hộ có quyền tạo mùa vụ
