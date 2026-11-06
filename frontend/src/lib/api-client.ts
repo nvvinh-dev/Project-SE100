@@ -45,6 +45,7 @@ interface RetriableRequestConfig extends InternalAxiosRequestConfig {
 
 let refreshing: Promise<boolean> | null = null;
 let onSessionEnded: ((error?: ApiError) => void) | null = null;
+let onPermissionsChanged: (() => void) | null = null;
 
 /**
  * Đăng ký việc cần làm khi phiên kết thúc giữa chừng: làm mới phiên thất bại, hoặc tài khoản bị khóa.
@@ -80,6 +81,14 @@ export function refreshAccessToken(): Promise<boolean> {
       refreshing = null;
     });
   return refreshing;
+}
+
+/**
+ * Đăng ký việc cần làm khi API trả `FORBIDDEN` lúc đang dùng (Chủ hộ vừa tắt quyền bổ sung, đổi vai trò):
+ * `AuthProvider` nạp lại người dùng hiện tại để điều hướng ẩn mục không còn quyền và trang đang mở hiện báo không có quyền.
+ */
+export function setPermissionsChangedHandler(handler: (() => void) | null): void {
+  onPermissionsChanged = handler;
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -120,6 +129,9 @@ apiClient.interceptors.response.use(undefined, async (error: unknown) => {
   } else if (usesSession && apiError.code === "ACCOUNT_LOCKED") {
     // BR-GEN-04: tài khoản bị khóa có hiệu lực ngay ở yêu cầu kế tiếp (D-11), nên kết thúc phiên và báo lý do.
     onSessionEnded?.(apiError);
+  } else if (usesSession && apiError.code === "FORBIDDEN") {
+    // Câu `detail` do trang đang gọi hiện (toast hoặc khung báo lỗi trên form); ở đây chỉ nạp lại quyền.
+    onPermissionsChanged?.();
   }
 
   return Promise.reject(apiError);
