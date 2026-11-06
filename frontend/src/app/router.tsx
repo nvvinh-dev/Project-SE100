@@ -6,6 +6,7 @@ import { NotFoundPage } from "@/app/pages/NotFoundPage";
 import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
 import { authRoutes } from "@/features/auth/routes";
+import { plotRoutes } from "@/features/plots/routes";
 import { ACCESS, canAccess } from "@/lib/auth/access";
 import { RedirectIfAuthenticated } from "@/lib/auth/RedirectIfAuthenticated";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
@@ -27,6 +28,7 @@ const routes: RouteObject[] = [
           // Nhân công, Quản trị mở `/` thì TodayPage chuyển tới trang đầu của họ, nên route này không khai báo quyền.
           { path: "/", element: <TodayPage /> },
           { path: "/more", element: <MorePage />, handle: { access: ACCESS.household } satisfies RouteHandle },
+          ...plotRoutes,
           { path: "*", element: <NotFoundPage /> },
         ],
       },
