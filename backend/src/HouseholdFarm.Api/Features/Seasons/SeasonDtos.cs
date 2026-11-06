@@ -22,10 +22,10 @@ public enum SeasonOperation
     ManageAssignments,
 
     /// <summary>Tạo, sửa, hủy công việc (Planned, InProgress)</summary>
-    ManageTasks,
+    ManageFarmTasks,
 
     /// <summary>Ghi kết quả công việc, vật tư đã dùng (InProgress)</summary>
-    RecordTaskExecution,
+    RecordFarmTaskResult,
 
     /// <summary>Xuất kho thủ công cho mùa vụ; hủy giao dịch xuất của mùa vụ (InProgress, ngoại lệ Kho: ManageStock)</summary>
     StockOut,
@@ -49,7 +49,7 @@ public enum SeasonOperation
     ManageNotes,
 
     /// <summary>Tạo tóm tắt AI (Closed)</summary>
-    GenerateAiSummary,
+    GenerateAISummary,
 }
 
 /// <summary>

@@ -244,7 +244,6 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
     private async Task<Plot> EnsurePlotActiveAsync(Guid plotId, CancellationToken ct)
     {
         var plot = await db.Plots
-            .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == plotId, ct)
             ?? throw AppException.NotFound("thửa đất");
 
@@ -263,7 +262,6 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
     private async Task<Crop> EnsureCropActiveAsync(Guid cropId, CancellationToken ct)
     {
         var crop = await db.Crops
-            .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == cropId, ct)
             ?? throw AppException.NotFound("cây trồng");
 

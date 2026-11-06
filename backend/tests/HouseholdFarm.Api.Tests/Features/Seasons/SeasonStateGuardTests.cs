@@ -5,6 +5,7 @@ using HouseholdFarm.Api.Domain.Enums;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace HouseholdFarm.Api.Tests.Features.Seasons;
 
@@ -118,7 +119,7 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
         await using var dbWithFinance = postgres.CreateDbContext(TestCurrentUser.For(userWithFinance));
         var guardWithFinance = new SeasonStateGuard(dbWithFinance, TestCurrentUser.For(userWithFinance));
 
-        var result = await guardWithFinance.EnsureOperationAllowedAsync(season.Id, SeasonOperation.GenerateAiSummary, forUpdate: false, ct);
+        var result = await guardWithFinance.EnsureOperationAllowedAsync(season.Id, SeasonOperation.GenerateAISummary, forUpdate: false, ct);
         Assert.Equal(season.Id, result.Id);
         Assert.Equal(SeasonStatus.Closed, result.Status);
 
@@ -127,7 +128,7 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
         var guardNoFinance = new SeasonStateGuard(dbNoFinance, TestCurrentUser.For(household.Member));
 
         var ex = await Assert.ThrowsAsync<AppException>(
-            () => guardNoFinance.EnsureOperationAllowedAsync(season.Id, SeasonOperation.GenerateAiSummary, forUpdate: false, ct));
+            () => guardNoFinance.EnsureOperationAllowedAsync(season.Id, SeasonOperation.GenerateAISummary, forUpdate: false, ct));
         Assert.Equal(ErrorCodes.NotFound, ex.Code);
     }
 
@@ -137,8 +138,8 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
     [InlineData(SeasonOperation.ChangePlotOrCrop, SeasonStatus.Planned)]
     [InlineData(SeasonOperation.ManagePlannedSupplies, SeasonStatus.Planned)]
     [InlineData(SeasonOperation.ManageAssignments, SeasonStatus.Planned)]
-    [InlineData(SeasonOperation.ManageTasks, SeasonStatus.InProgress)]
-    [InlineData(SeasonOperation.RecordTaskExecution, SeasonStatus.InProgress)]
+    [InlineData(SeasonOperation.ManageFarmTasks, SeasonStatus.InProgress)]
+    [InlineData(SeasonOperation.RecordFarmTaskResult, SeasonStatus.InProgress)]
     [InlineData(SeasonOperation.StockOut, SeasonStatus.InProgress)]
     [InlineData(SeasonOperation.ManageHarvests, SeasonStatus.InProgress)]
     [InlineData(SeasonOperation.AdjustProduceStock, SeasonStatus.InProgress)]
@@ -150,7 +151,7 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
     [InlineData(SeasonOperation.ManageNotes, SeasonStatus.InProgress)]
     [InlineData(SeasonOperation.ManageNotes, SeasonStatus.Closed)]
     [InlineData(SeasonOperation.ManageNotes, SeasonStatus.Cancelled)]
-    [InlineData(SeasonOperation.GenerateAiSummary, SeasonStatus.Closed)]
+    [InlineData(SeasonOperation.GenerateAISummary, SeasonStatus.Closed)]
     public async Task Table43_AllowedStatuses_Succeeds(SeasonOperation operation, SeasonStatus status)
     {
         var ct = TestContext.Current.CancellationToken;
@@ -171,15 +172,15 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
     [InlineData(SeasonOperation.ChangePlotOrCrop, SeasonStatus.InProgress)]
     [InlineData(SeasonOperation.ManagePlannedSupplies, SeasonStatus.InProgress)]
     [InlineData(SeasonOperation.ManageAssignments, SeasonStatus.Closed)]
-    [InlineData(SeasonOperation.ManageTasks, SeasonStatus.Cancelled)]
-    [InlineData(SeasonOperation.RecordTaskExecution, SeasonStatus.Planned)]
+    [InlineData(SeasonOperation.ManageFarmTasks, SeasonStatus.Cancelled)]
+    [InlineData(SeasonOperation.RecordFarmTaskResult, SeasonStatus.Planned)]
     [InlineData(SeasonOperation.StockOut, SeasonStatus.Planned)]
     [InlineData(SeasonOperation.ManageHarvests, SeasonStatus.Closed)]
     [InlineData(SeasonOperation.AdjustProduceStock, SeasonStatus.Cancelled)]
     [InlineData(SeasonOperation.ManageSales, SeasonStatus.Planned)]
     [InlineData(SeasonOperation.RecordPayment, SeasonStatus.Cancelled)]
     [InlineData(SeasonOperation.ManageExpenses, SeasonStatus.Closed)]
-    [InlineData(SeasonOperation.GenerateAiSummary, SeasonStatus.InProgress)]
+    [InlineData(SeasonOperation.GenerateAISummary, SeasonStatus.InProgress)]
     public async Task Table43_BlockedStatuses_ThrowsSeasonInvalidState(SeasonOperation operation, SeasonStatus status)
     {
         var ct = TestContext.Current.CancellationToken;
@@ -211,7 +212,7 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
             () => guard.EnsureInProgressAsync(season.Id, null, forUpdate: true, ct));
     }
 
-    [Fact(DisplayName = "BR-GEN-12: khóa dòng seasons thành công trong transaction đang mở")]
+    [Fact(DisplayName = "BR-GEN-12: khóa dòng seasons thành công trong transaction đang mở, kết nối khác thử khóa bị từ chối")]
     public async Task EnsureStatus_ForUpdateWithTransaction_LocksRowSuccessfully()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -228,6 +229,18 @@ public class SeasonStateGuardTests(PostgresFixture postgres)
         Assert.Equal(season.Id, result.Id);
         Assert.Equal(SeasonStatus.InProgress, result.Status);
 
+        // Kết nối thứ hai mở giao dịch riêng và cố khóa dòng bằng NOWAIT -> bị từ chối do dòng đang bị tx khóa
+        await using var db2 = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        await using var tx2 = await db2.Database.BeginTransactionAsync(ct);
+
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() =>
+            db2.Database.ExecuteSqlAsync($"SELECT 1 FROM seasons WHERE id = {season.Id} FOR UPDATE NOWAIT", ct));
+
+        var pgEx = ex as PostgresException ?? ex.InnerException as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal(PostgresErrorCodes.LockNotAvailable, pgEx.SqlState);
+
+        await tx2.RollbackAsync(ct);
         await tx.CommitAsync(ct);
     }
 }

@@ -25,8 +25,8 @@ public static class SeasonStateRules
             SeasonOperation.ChangePlotOrCrop => (StatusPlannedOnly, null),
             SeasonOperation.ManagePlannedSupplies => (StatusPlannedOnly, null),
             SeasonOperation.ManageAssignments => (StatusPlannedAndInProgress, null),
-            SeasonOperation.ManageTasks => (StatusPlannedAndInProgress, null),
-            SeasonOperation.RecordTaskExecution => (StatusInProgressOnly, null),
+            SeasonOperation.ManageFarmTasks => (StatusPlannedAndInProgress, null),
+            SeasonOperation.RecordFarmTaskResult => (StatusInProgressOnly, null),
             SeasonOperation.StockOut => (StatusInProgressOnly, ExtraPermission.ManageStock),
             SeasonOperation.ManageHarvests => (StatusInProgressOnly, null),
             SeasonOperation.AdjustProduceStock => (StatusInProgressOnly, null),
@@ -34,7 +34,7 @@ public static class SeasonStateRules
             SeasonOperation.RecordPayment => (StatusInProgressAndClosed, ExtraPermission.ManageFinance),
             SeasonOperation.ManageExpenses => (StatusInProgressOnly, ExtraPermission.ManageFinance),
             SeasonOperation.ManageNotes => (StatusAll, null),
-            SeasonOperation.GenerateAiSummary => (StatusClosedOnly, ExtraPermission.ManageFinance),
+            SeasonOperation.GenerateAISummary => (StatusClosedOnly, ExtraPermission.ManageFinance),
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Loại thao tác không hợp lệ."),
         };
 }

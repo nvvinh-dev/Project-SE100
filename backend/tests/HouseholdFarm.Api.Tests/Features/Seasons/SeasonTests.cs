@@ -4,6 +4,7 @@ using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Domain.Enums;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace HouseholdFarm.Api.Tests.Features.Seasons;
 
@@ -115,6 +116,16 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var client = factory.CreateClientFor(household.Owner);
 
+        // Lấy version ban đầu của cả hai thửa và hai cây
+        uint plot1VersionBefore, plot2VersionBefore, crop1VersionBefore, crop2VersionBefore;
+        await using (var dbCheck = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner)))
+        {
+            plot1VersionBefore = await dbCheck.Plots.Where(p => p.Id == plot1.Id).Select(p => p.Version).FirstAsync(ct);
+            plot2VersionBefore = await dbCheck.Plots.Where(p => p.Id == plot2.Id).Select(p => p.Version).FirstAsync(ct);
+            crop1VersionBefore = await dbCheck.Crops.Where(c => c.Id == crop1.Id).Select(c => c.Version).FirstAsync(ct);
+            crop2VersionBefore = await dbCheck.Crops.Where(c => c.Id == crop2.Id).Select(c => c.Version).FirstAsync(ct);
+        }
+
         // Tạo mùa vụ Planned
         var createRequest = new CreateSeasonRequest(
             plot1.Id,
@@ -149,6 +160,20 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("2027-03-01", updated.GetProperty("expectedHarvestDate").GetString());
         Assert.Equal(5000m, updated.GetProperty("targetYield").GetDecimal());
         Assert.True(updated.GetProperty("version").GetUInt32() > initialVersion);
+
+        // Kiểm tra version của cả hai thửa và hai cây không bị thay đổi khi đổi thửa, cây của mùa vụ
+        await using (var dbCheck = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner)))
+        {
+            var plot1VersionAfter = await dbCheck.Plots.Where(p => p.Id == plot1.Id).Select(p => p.Version).FirstAsync(ct);
+            var plot2VersionAfter = await dbCheck.Plots.Where(p => p.Id == plot2.Id).Select(p => p.Version).FirstAsync(ct);
+            var crop1VersionAfter = await dbCheck.Crops.Where(c => c.Id == crop1.Id).Select(c => c.Version).FirstAsync(ct);
+            var crop2VersionAfter = await dbCheck.Crops.Where(c => c.Id == crop2.Id).Select(c => c.Version).FirstAsync(ct);
+
+            Assert.Equal(plot1VersionBefore, plot1VersionAfter);
+            Assert.Equal(plot2VersionBefore, plot2VersionAfter);
+            Assert.Equal(crop1VersionBefore, crop1VersionAfter);
+            Assert.Equal(crop2VersionBefore, crop2VersionAfter);
+        }
     }
 
     [Fact(DisplayName = "FR-SEA-07, BR-SEA-10: mùa vụ InProgress đổi ngày và sản lượng thành công; đổi thửa hoặc cây trả SEASON_INVALID_STATE")]

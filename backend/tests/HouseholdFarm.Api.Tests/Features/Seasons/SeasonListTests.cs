@@ -135,8 +135,8 @@ public class SeasonListTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var client = factory.CreateClientFor(household.Owner);
 
-        // 1. ManageTasks (công việc): Planned, InProgress
-        var resTasks = await client.GetAsync($"{OptionsPath}?operation=ManageTasks", ct);
+        // 1. ManageFarmTasks (công việc): Planned, InProgress
+        var resTasks = await client.GetAsync($"{OptionsPath}?operation=ManageFarmTasks", ct);
         Assert.Equal(HttpStatusCode.OK, resTasks.StatusCode);
         var itemsTasks = (await resTasks.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
         Assert.Contains(planned.Id, itemsTasks);
