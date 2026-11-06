@@ -20,7 +20,8 @@ export function ErrorAlert({ error, onRetry, retryLabel = "Thử lại" }: Error
       <AlertTitle className="leading-snug">{getErrorMessage(error)}</AlertTitle>
       {onRetry && (
         <AlertDescription>
-          <Button variant="outline" className="mt-2" onClick={onRetry}>
+          {/* type="button": khung lỗi hay nằm trong form, nút mặc định là nút gửi form. */}
+          <Button type="button" variant="outline" className="mt-2" onClick={onRetry}>
             <RotateCwIcon data-icon="inline-start" />
             {retryLabel}
           </Button>

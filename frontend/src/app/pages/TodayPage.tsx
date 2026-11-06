@@ -66,6 +66,7 @@ async function getPlotCount(): Promise<number> {
  * Bước cây trồng, mùa vụ chưa có API để kiểm tra nên luôn hiện là chưa xong; nối ở CHUNG-02.
  */
 function GettingStarted() {
+  // Nằm dưới plotKeys.all ("plots") nên tạo thửa xong thì tự làm mới.
   const plotCount = useQuery({ queryKey: ["plots", "count"], queryFn: getPlotCount });
 
   const steps = [
