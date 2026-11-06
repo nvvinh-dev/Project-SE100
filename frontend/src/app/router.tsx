@@ -7,6 +7,7 @@ import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
 import { authRoutes } from "@/features/auth/routes";
 import { plotRoutes } from "@/features/plots/routes";
+import { supplyRoutes } from "@/features/supplies/routes";
 import { ACCESS, canAccess } from "@/lib/auth/access";
 import { RedirectIfAuthenticated } from "@/lib/auth/RedirectIfAuthenticated";
 import { RequireAuth } from "@/lib/auth/RequireAuth";
@@ -29,6 +30,7 @@ const routes: RouteObject[] = [
           { path: "/", element: <TodayPage /> },
           { path: "/more", element: <MorePage />, handle: { access: ACCESS.household } satisfies RouteHandle },
           ...plotRoutes,
+          ...supplyRoutes,
           { path: "*", element: <NotFoundPage /> },
         ],
       },
