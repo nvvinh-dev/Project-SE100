@@ -1,6 +1,7 @@
 using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace HouseholdFarm.Api.Tests.Infrastructure;
 
@@ -178,6 +179,19 @@ public static class TestData
             SeasonId = season.Id,
             UserId = member.Id,
         });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Bật hoặc tắt cài đặt cho phép mùa vụ chồng lấn của hộ (BR-SEA-04).</summary>
+    public static async Task SetAllowOverlappingSeasonsAsync(
+        PostgresFixture postgres,
+        TestHousehold household,
+        bool allow,
+        CancellationToken ct)
+    {
+        await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        var h = await db.Households.FirstAsync(h => h.Id == household.Household.Id, ct);
+        h.Settings.AllowOverlappingSeasons = allow;
         await db.SaveChangesAsync(ct);
     }
 

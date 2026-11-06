@@ -103,6 +103,152 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains("Lúa ST25", body.GetProperty("detail").GetString());
     }
 
+    [Fact(DisplayName = "TC-01 (BR-SEA-02, BR-SEA-04): tạo mùa vụ trùng khoảng ngày bị SEASON_OVERLAP; bật AllowOverlappingSeasons thì tạo thành công")]
+    public async Task Create_OverlapWithExistingSeason_TC01()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var crop = await TestData.CreateCropAsync(factory.Postgres, household, "Lúa ST25", ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        // Mùa vụ 1: 01/01/2026 – 31/03/2026
+        var request1 = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 1, 1),
+            ExpectedHarvestDate: new DateOnly(2026, 3, 31),
+            TargetYield: 4000m);
+        var response1 = await client.PostAsJsonAsync(SeasonsPath, request1, ct);
+        Assert.Equal(HttpStatusCode.Created, response1.StatusCode);
+
+        // Mùa vụ 2: 15/03/2026 – 15/06/2026 (trùng từ 15/03 đến 31/03)
+        var request2 = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 3, 15),
+            ExpectedHarvestDate: new DateOnly(2026, 6, 15),
+            TargetYield: 3500m);
+        var response2 = await client.PostAsJsonAsync(SeasonsPath, request2, ct);
+        var bodyOverlap = await response2.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonOverlap, ct);
+        Assert.Contains("TD001", bodyOverlap.GetProperty("detail").GetString());
+
+        // Bật cài đặt AllowOverlappingSeasons cho hộ (BR-SEA-04)
+        await TestData.SetAllowOverlappingSeasonsAsync(factory.Postgres, household, allow: true, ct);
+
+        // Gửi lại yêu cầu tạo mùa vụ 2: thành công
+        var responseRetry = await client.PostAsJsonAsync(SeasonsPath, request2, ct);
+        Assert.Equal(HttpStatusCode.Created, responseRetry.StatusCode);
+    }
+
+    [Fact(DisplayName = "BR-SEA-02: trùng đúng một ngày biên (ngày kết thúc mùa trước = ngày bắt đầu mùa sau) trả SEASON_OVERLAP")]
+    public async Task Create_SingleBoundaryDayOverlap_ReturnsSeasonOverlap()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var crop = await TestData.CreateCropAsync(factory.Postgres, household, "Lúa ST25", ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        // Mùa vụ 1: 01/01/2026 – 31/03/2026
+        var request1 = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 1, 1),
+            ExpectedHarvestDate: new DateOnly(2026, 3, 31),
+            TargetYield: 4000m);
+        await client.PostAsJsonAsync(SeasonsPath, request1, ct);
+
+        // Mùa vụ 2: bắt đầu đúng ngày 31/03/2026
+        var request2 = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 3, 31),
+            ExpectedHarvestDate: new DateOnly(2026, 6, 30),
+            TargetYield: 3500m);
+        var response2 = await client.PostAsJsonAsync(SeasonsPath, request2, ct);
+        await response2.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonOverlap, ct);
+    }
+
+    [Fact(DisplayName = "BR-SEA-02: hai khoảng thời gian liền kề không giao nhau thì tạo thành công")]
+    public async Task Create_AdjacentRangesNonOverlapping_ReturnsCreated()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var crop = await TestData.CreateCropAsync(factory.Postgres, household, "Lúa ST25", ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        // Mùa vụ 1: 01/01/2026 – 31/03/2026
+        var request1 = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 1, 1),
+            ExpectedHarvestDate: new DateOnly(2026, 3, 31),
+            TargetYield: 4000m);
+        await client.PostAsJsonAsync(SeasonsPath, request1, ct);
+
+        // Mùa vụ 2: bắt đầu ngay ngày hôm sau 01/04/2026
+        var request2 = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 4, 1),
+            ExpectedHarvestDate: new DateOnly(2026, 6, 30),
+            TargetYield: 3500m);
+        var response2 = await client.PostAsJsonAsync(SeasonsPath, request2, ct);
+        Assert.Equal(HttpStatusCode.Created, response2.StatusCode);
+    }
+
+    [Fact(DisplayName = "BR-SEA-02: mùa vụ đã hủy (Cancelled) không gây chồng lấn với mùa vụ mới")]
+    public async Task Create_CancelledSeasonDoesNotCauseOverlap()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var crop = await TestData.CreateCropAsync(factory.Postgres, household, "Lúa ST25", ct);
+
+        // Mùa vụ cũ đã hủy
+        await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Cancelled, ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        // Mùa vụ mới cùng thửa và trùng thời gian với mùa vụ đã hủy
+        var request = new CreateSeasonRequest(
+            plot.Id,
+            crop.Id,
+            StartDate: new DateOnly(2026, 10, 1),
+            ExpectedHarvestDate: new DateOnly(2027, 1, 15),
+            TargetYield: 5000m);
+
+        var response = await client.PostAsJsonAsync(SeasonsPath, request, ct);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact(DisplayName = "BR-SEA-03: Lớp 2 - thửa có mùa vụ đang canh tác (InProgress) trả SEASON_PLOT_BUSY, bật AllowOverlappingSeasons thì bỏ qua")]
+    public async Task EnsurePlotNotBusy_Layer2Validation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await TestData.CreateHouseholdAsync(postgres: factory.Postgres, ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        var seasonService = new SeasonService(db, TestCurrentUser.For(household.Owner));
+
+        // Chưa bật AllowOverlappingSeasons: ném SEASON_PLOT_BUSY
+        var ex = await Assert.ThrowsAsync<AppException>(
+            () => seasonService.EnsurePlotNotBusyAsync(plot.Id, excludeSeasonId: null, ct));
+        Assert.Equal(ErrorCodes.SeasonPlotBusy, ex.Code);
+        Assert.Contains("đang canh tác", ex.Message);
+
+        // Bật AllowOverlappingSeasons: bỏ qua kiểm tra
+        await TestData.SetAllowOverlappingSeasonsAsync(factory.Postgres, household, allow: true, ct);
+        await seasonService.EnsurePlotNotBusyAsync(plot.Id, excludeSeasonId: null, ct);
+    }
+
     [Fact(DisplayName = "BR-SEA-01: ngày dự kiến thu hoạch trước ngày bắt đầu trả VALIDATION_ERROR")]
     public async Task Create_ExpectedHarvestDateBeforeStartDate_ReturnsValidationError()
     {

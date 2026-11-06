@@ -5,5 +5,17 @@ public interface ISeasonService
     Task<SeasonResponse> CreateAsync(CreateSeasonRequest request, CancellationToken ct);
 
     Task<SeasonResponse> GetAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
+    /// Kiểm tra chồng lấn kế hoạch Lớp 1 (BR-SEA-02): so khoảng ngày với các mùa vụ Planned/InProgress trên cùng thửa.
+    /// Bỏ qua khi hộ bật AllowOverlappingSeasons (BR-SEA-04).
+    /// </summary>
+    Task EnsureNoPlannedOverlapAsync(Guid plotId, DateOnly startDate, DateOnly expectedHarvestDate, Guid? excludeSeasonId, CancellationToken ct);
+
+    /// <summary>
+    /// Kiểm tra thửa đang bận Lớp 2 (BR-SEA-03): từ chối nếu thửa có mùa vụ khác đang InProgress khi Start hoặc Reopen.
+    /// Bỏ qua khi hộ bật AllowOverlappingSeasons (BR-SEA-04).
+    /// </summary>
+    Task EnsurePlotNotBusyAsync(Guid plotId, Guid? excludeSeasonId, CancellationToken ct);
 }
 

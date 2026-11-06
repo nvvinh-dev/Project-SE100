@@ -19,6 +19,9 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
         var plot = await EnsurePlotActiveAsync(request.PlotId, ct);
         var crop = await EnsureCropActiveAsync(request.CropId, ct);
 
+        // BR-SEA-02, BR-SEA-04: Kiểm tra chồng lấn mùa vụ lớp 1 trên cùng thửa
+        await EnsureNoPlannedOverlapAsync(request.PlotId, request.StartDate, request.ExpectedHarvestDate, excludeSeasonId: null, ct);
+
         var season = new Season
         {
             PlotId = request.PlotId,
@@ -108,6 +111,110 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
             ?? throw AppException.NotFound("mùa vụ");
 
         return season;
+    }
+
+    public async Task EnsureNoPlannedOverlapAsync(
+        Guid plotId,
+        DateOnly startDate,
+        DateOnly expectedHarvestDate,
+        Guid? excludeSeasonId,
+        CancellationToken ct)
+    {
+        // BR-SEA-04: Bỏ qua kiểm tra khi hộ bật AllowOverlappingSeasons
+        if (await IsAllowOverlappingSeasonsAsync(ct))
+        {
+            return;
+        }
+
+        // BR-SEA-02: So khoảng [startDate, expectedHarvestDate] với các mùa vụ khác đang Planned hoặc InProgress trên cùng thửa
+        var conflict = await db.Seasons
+            .AsNoTracking()
+            .Where(s => s.PlotId == plotId
+                        && (excludeSeasonId == null || s.Id != excludeSeasonId)
+                        && (s.Status == SeasonStatus.Planned || s.Status == SeasonStatus.InProgress)
+                        && s.StartDate <= expectedHarvestDate
+                        && startDate <= s.ExpectedHarvestDate)
+            .Select(s => new
+            {
+                s.Id,
+                PlotCode = s.Plot.Code,
+                CropName = s.Crop.Name,
+                s.StartDate,
+                s.ExpectedHarvestDate,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (conflict is not null)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonOverlap,
+                $"Thửa đất '{conflict.PlotCode}' đã có mùa vụ '{conflict.CropName}' ({conflict.StartDate:dd/MM/yyyy} – {conflict.ExpectedHarvestDate:dd/MM/yyyy}) trùng thời gian.",
+                new
+                {
+                    conflictingSeasonId = conflict.Id,
+                    plotCode = conflict.PlotCode,
+                    cropName = conflict.CropName,
+                    startDate = conflict.StartDate,
+                    expectedHarvestDate = conflict.ExpectedHarvestDate,
+                });
+        }
+    }
+
+    public async Task EnsurePlotNotBusyAsync(
+        Guid plotId,
+        Guid? excludeSeasonId,
+        CancellationToken ct)
+    {
+        // BR-SEA-04: Bỏ qua kiểm tra khi hộ bật AllowOverlappingSeasons
+        if (await IsAllowOverlappingSeasonsAsync(ct))
+        {
+            return;
+        }
+
+        // BR-SEA-03: Kiểm tra thửa có mùa vụ khác đang InProgress không
+        var busy = await db.Seasons
+            .AsNoTracking()
+            .Where(s => s.PlotId == plotId
+                        && (excludeSeasonId == null || s.Id != excludeSeasonId)
+                        && s.Status == SeasonStatus.InProgress)
+            .Select(s => new
+            {
+                s.Id,
+                PlotCode = s.Plot.Code,
+                CropName = s.Crop.Name,
+                s.StartDate,
+                s.ExpectedHarvestDate,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (busy is not null)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonPlotBusy,
+                $"Thửa đất '{busy.PlotCode}' đang có mùa vụ '{busy.CropName}' đang canh tác, chưa thể bắt đầu hoặc mở lại mùa vụ khác.",
+                new
+                {
+                    busySeasonId = busy.Id,
+                    plotCode = busy.PlotCode,
+                    cropName = busy.CropName,
+                    startDate = busy.StartDate,
+                    expectedHarvestDate = busy.ExpectedHarvestDate,
+                });
+        }
+    }
+
+    private async Task<bool> IsAllowOverlappingSeasonsAsync(CancellationToken ct)
+    {
+        if (currentUser.HouseholdId is null)
+        {
+            return false;
+        }
+
+        return await db.Households
+            .AsNoTracking()
+            .Where(h => h.Id == currentUser.HouseholdId.Value)
+            .Select(h => h.Settings.AllowOverlappingSeasons)
+            .FirstOrDefaultAsync(ct);
     }
 }
 
