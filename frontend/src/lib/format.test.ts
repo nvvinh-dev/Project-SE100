@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatArea, formatDate, formatDateTime, formatMoney, formatQuantity, parseDecimalInput } from "@/lib/format";
+import {
+  formatArea,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatQuantity,
+  formatWeekdayDate,
+  parseDecimalInput,
+} from "@/lib/format";
 
 // Intl dùng khoảng trắng không ngắt dòng giữa số và đơn vị.
 const NBSP = " ";
@@ -88,4 +96,14 @@ describe("parseDecimalInput", () => {
       expect(parseDecimalInput(text)).toBeNull();
     },
   );
+});
+
+describe("formatWeekdayDate", () => {
+  it("ghi thứ và ngày theo giờ Việt Nam", () => {
+    expect(formatWeekdayDate(new Date("2026-09-26T03:00:00Z"))).toBe("Thứ Bảy, 26/09/2026");
+  });
+
+  it("23 giờ UTC đã là ngày hôm sau ở Việt Nam", () => {
+    expect(formatWeekdayDate(new Date("2026-09-26T18:30:00Z"))).toBe("Chủ Nhật, 27/09/2026");
+  });
 });

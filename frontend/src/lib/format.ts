@@ -57,6 +57,22 @@ export function formatDate(date: string): string {
   return `${day}/${month}/${year}`;
 }
 
+const weekdayFormat = new Intl.DateTimeFormat("vi-VN", { timeZone: VIETNAM_TIME_ZONE, weekday: "long" });
+const dayMonthYearFormat = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: VIETNAM_TIME_ZONE,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+/**
+ * Ngày của một thời điểm theo giờ Việt Nam kèm thứ, ví dụ `Thứ Bảy, 26/09/2026` ở đầu trang "Hôm nay".
+ * Theo giờ Việt Nam, không theo múi giờ của máy: 0 giờ tới 7 giờ sáng ở Việt Nam thì ngày UTC vẫn là hôm qua.
+ */
+export function formatWeekdayDate(instant: Date): string {
+  return `${weekdayFormat.format(instant)}, ${dayMonthYearFormat.format(instant)}`;
+}
+
 /** Thời điểm ISO 8601 UTC → `dd/MM/yyyy HH:mm` theo giờ Việt Nam, không phụ thuộc múi giờ của máy. */
 export function formatDateTime(instant: string): string {
   const value = new Date(instant);

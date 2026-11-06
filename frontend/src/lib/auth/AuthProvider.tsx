@@ -2,10 +2,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { showError } from "@/components/common/toast";
-import { refreshAccessToken, setSessionEndedHandler } from "@/lib/api-client";
+import { refreshAccessToken, setPermissionsChangedHandler, setSessionEndedHandler } from "@/lib/api-client";
 import type { ApiError } from "@/lib/api-error";
 import { AuthContext, type AuthStatus } from "@/lib/auth/auth-context";
 import { setAccessToken } from "@/lib/auth/token-store";
+import { currentUserKeys } from "@/lib/auth/use-current-user";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -66,6 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionEndedHandler(endSession);
     return () => setSessionEndedHandler(null);
   }, [endSession]);
+
+  useEffect(() => {
+    setPermissionsChangedHandler(() => void queryClient.invalidateQueries({ queryKey: currentUserKeys.all }));
+    return () => setPermissionsChangedHandler(null);
+  }, [queryClient]);
 
   const value = useMemo(() => ({ status, signIn }), [status, signIn]);
 
