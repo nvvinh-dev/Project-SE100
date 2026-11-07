@@ -1,11 +1,14 @@
 import type {
   CreateStockTransactionRequest,
   CreateSupplyRequest,
+  StockTransactionListItem,
+  StockTransactionQuery,
   StockTransactionResponse,
   SupplyListItem,
   SupplyQuery,
   SupplyResponse,
   UpdateSupplyRequest,
+  VoidStockTransactionRequest,
 } from "@/features/supplies/types";
 import { apiClient, type PageMeta, type ResponseEnvelope, type ResponseWarning } from "@/lib/api-client";
 
@@ -45,5 +48,27 @@ export interface StockTransactionResult {
 
 export async function createStockTransaction(request: CreateStockTransactionRequest): Promise<StockTransactionResult> {
   const response = await apiClient.post<ResponseEnvelope<StockTransactionResponse>>("/stock-transactions", request);
+  return { transaction: response.data.data, warnings: response.data.warnings };
+}
+
+/** Một trang của lịch sử giao dịch kho. */
+export interface StockTransactionPage {
+  items: StockTransactionListItem[];
+  meta: PageMeta;
+}
+
+export async function getStockTransactions(query: StockTransactionQuery): Promise<StockTransactionPage> {
+  const response = await apiClient.get<ResponseEnvelope<StockTransactionListItem[]>>("/stock-transactions", {
+    params: query,
+  });
+  const meta = response.data.meta ?? { page: 1, pageSize: response.data.data.length, totalCount: response.data.data.length };
+  return { items: response.data.data, meta };
+}
+
+export async function voidStockTransaction(
+  id: string,
+  request: VoidStockTransactionRequest,
+): Promise<StockTransactionResult> {
+  const response = await apiClient.post<ResponseEnvelope<StockTransactionResponse>>(`/stock-transactions/${id}/void`, request);
   return { transaction: response.data.data, warnings: response.data.warnings };
 }

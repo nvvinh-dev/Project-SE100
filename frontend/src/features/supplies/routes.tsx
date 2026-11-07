@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router";
 import type { RouteHandle } from "@/app/route-handle";
 import { StockAdjustPage } from "@/features/supplies/pages/StockAdjustPage";
 import { StockInPage } from "@/features/supplies/pages/StockInPage";
+import { StockTransactionListPage } from "@/features/supplies/pages/StockTransactionListPage";
 import { SupplyCreatePage } from "@/features/supplies/pages/SupplyCreatePage";
 import { SupplyDetailPage } from "@/features/supplies/pages/SupplyDetailPage";
 import { SupplyEditPage } from "@/features/supplies/pages/SupplyEditPage";
@@ -31,5 +32,10 @@ export const supplyRoutes: RouteObject[] = [
     path: "/stock/adjust",
     element: <StockAdjustPage />,
     handle: { access: ACCESS.stockManager, form: true } satisfies RouteHandle,
+  },
+  {
+    path: "/stock-transactions",
+    element: <StockTransactionListPage />,
+    handle: { access: ACCESS.stockManager } satisfies RouteHandle,
   },
 ];

@@ -1,11 +1,24 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createStockTransaction, createSupply, getSupplies, getSupply, updateSupply } from "@/features/supplies/api";
-import type { SupplyQuery, UpdateSupplyRequest } from "@/features/supplies/types";
+import {
+  createStockTransaction,
+  createSupply,
+  getStockTransactions,
+  getSupplies,
+  getSupply,
+  updateSupply,
+  voidStockTransaction,
+} from "@/features/supplies/api";
+import type { StockTransactionQuery, SupplyQuery, UpdateSupplyRequest, VoidStockTransactionRequest } from "@/features/supplies/types";
 
 export const supplyKeys = {
   all: ["supplies"] as const,
   list: (query: SupplyQuery) => [...supplyKeys.all, "list", query] as const,
   detail: (id: string) => [...supplyKeys.all, "detail", id] as const,
+};
+
+export const stockTransactionKeys = {
+  all: ["stock-transactions"] as const,
+  list: (query: StockTransactionQuery) => [...stockTransactionKeys.all, "list", query] as const,
 };
 
 export function useSupplies(query: SupplyQuery) {
@@ -42,7 +55,32 @@ export function useCreateStockTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createStockTransaction,
-    // Tồn, giá vốn của vật tư đều đổi theo giao dịch kho.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: supplyKeys.all }),
+    // Tồn, giá vốn của vật tư và lịch sử kho đều đổi theo giao dịch kho.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: supplyKeys.all }),
+        queryClient.invalidateQueries({ queryKey: stockTransactionKeys.all }),
+      ]),
+  });
+}
+
+export function useStockTransactions(query: StockTransactionQuery) {
+  return useQuery({
+    queryKey: stockTransactionKeys.list(query),
+    queryFn: () => getStockTransactions(query),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useVoidStockTransaction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: VoidStockTransactionRequest }) => voidStockTransaction(id, request),
+    // Hủy giao dịch đổi tồn, giá vốn của vật tư và dòng trong lịch sử kho.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: supplyKeys.all }),
+        queryClient.invalidateQueries({ queryKey: stockTransactionKeys.all }),
+      ]),
   });
 }
