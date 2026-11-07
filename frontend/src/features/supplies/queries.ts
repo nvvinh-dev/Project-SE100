@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createSupply, getSupplies, getSupply, updateSupply } from "@/features/supplies/api";
+import { createStockTransaction, createSupply, getSupplies, getSupply, updateSupply } from "@/features/supplies/api";
 import type { SupplyQuery, UpdateSupplyRequest } from "@/features/supplies/types";
 
 export const supplyKeys = {
@@ -18,7 +18,8 @@ export function useSupplies(query: SupplyQuery) {
 }
 
 export function useSupply(id: string) {
-  return useQuery({ queryKey: supplyKeys.detail(id), queryFn: () => getSupply(id) });
+  // Form kho gọi khi chưa chọn vật tư thì chưa có gì để tải.
+  return useQuery({ queryKey: supplyKeys.detail(id), queryFn: () => getSupply(id), enabled: id !== "" });
 }
 
 export function useCreateSupply() {
@@ -33,6 +34,15 @@ export function useUpdateSupply(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: UpdateSupplyRequest) => updateSupply(id, request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: supplyKeys.all }),
+  });
+}
+
+export function useCreateStockTransaction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createStockTransaction,
+    // Tồn, giá vốn của vật tư đều đổi theo giao dịch kho.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: supplyKeys.all }),
   });
 }

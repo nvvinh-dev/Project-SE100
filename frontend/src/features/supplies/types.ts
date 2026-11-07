@@ -1,5 +1,5 @@
 import type { PageQuery } from "@/lib/api-client";
-import type { RecordStatus, SupplyGroup, Unit } from "@/lib/enums";
+import type { RecordStatus, StockTransactionType, SupplyGroup, Unit } from "@/lib/enums";
 
 // Trùng tên DTO backend (Features/Supplies/SupplyDtos.cs).
 
@@ -62,4 +62,36 @@ export interface UpdateSupplyRequest extends CreateSupplyRequest {
   code: string;
   status: RecordStatus;
   version: number;
+}
+
+/** Giao dịch kho. `quantity` có dấu như trong database: `Out` âm, `Adjustment` âm khi giảm tồn. */
+export interface StockTransactionResponse {
+  id: string;
+  supplyId: string;
+  type: StockTransactionType;
+  seasonId: string | null;
+  transactionDate: string;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  reason: string | null;
+  note: string | null;
+  voidedAt: string | null;
+  version: number;
+}
+
+/**
+ * Tạo giao dịch kho. `quantity`: `In` số dương, `Adjustment` có dấu. `unitCost` bắt buộc với `In`, loại khác lấy giá vốn
+ * bình quân hiện tại. `reason` bắt buộc với `Adjustment`.
+ */
+export interface CreateStockTransactionRequest {
+  type: StockTransactionType;
+  supplyId: string;
+  quantity: number;
+  unitCost: number | null;
+  transactionDate: string;
+  seasonId: string | null;
+  reason: string | null;
+  note: string | null;
+  requestId: string;
 }

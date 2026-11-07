@@ -1,5 +1,7 @@
 import type { RouteObject } from "react-router";
 import type { RouteHandle } from "@/app/route-handle";
+import { StockAdjustPage } from "@/features/supplies/pages/StockAdjustPage";
+import { StockInPage } from "@/features/supplies/pages/StockInPage";
 import { SupplyCreatePage } from "@/features/supplies/pages/SupplyCreatePage";
 import { SupplyDetailPage } from "@/features/supplies/pages/SupplyDetailPage";
 import { SupplyEditPage } from "@/features/supplies/pages/SupplyEditPage";
@@ -19,5 +21,15 @@ export const supplyRoutes: RouteObject[] = [
     path: "/supplies/:id/edit",
     element: <SupplyEditPage />,
     handle: { access: ACCESS.owner, form: true } satisfies RouteHandle,
+  },
+  {
+    path: "/stock/in",
+    element: <StockInPage />,
+    handle: { access: ACCESS.stockManager, form: true } satisfies RouteHandle,
+  },
+  {
+    path: "/stock/adjust",
+    element: <StockAdjustPage />,
+    handle: { access: ACCESS.stockManager, form: true } satisfies RouteHandle,
   },
 ];
