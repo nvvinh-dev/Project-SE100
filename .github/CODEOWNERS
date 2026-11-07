@@ -1,5 +1,7 @@
 # Người duyệt PR vào develop: Giang và Hưng duyệt chéo PR của nhau; PR của Vinh do Giang hoặc Hưng duyệt.
+
 # GitHub không gán người duyệt theo người mở PR, nên cả hai cùng là code owner của toàn repo
+
 # (người mở PR không được tự gán, nên PR của Giang chỉ còn Hưng và ngược lại).
 
-*   @QuangGiang06 @by-hung
+- @QuangGiang06
