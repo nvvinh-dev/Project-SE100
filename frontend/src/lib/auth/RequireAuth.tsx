@@ -7,15 +7,18 @@ import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 /**
  * Bọc các trang cần đăng nhập. Chưa đăng nhập, hoặc làm mới phiên thất bại, thì chuyển tới `/login` và nhớ trang
- * đang mở để quay lại sau khi đăng nhập. Trang chỉ hiện khi đã có người dùng hiện tại.
+ * đang mở để quay lại sau khi đăng nhập (trừ khi người dùng tự đăng xuất). Trang chỉ hiện khi đã có người dùng hiện tại.
  */
 export function RequireAuth() {
-  const { status } = useAuth();
+  const { status, signedOut } = useAuth();
   const location = useLocation();
   const currentUser = useCurrentUser();
 
   if (status === "anonymous") {
-    const state: LoginLocationState = { from: location.pathname + location.search + location.hash };
+    // Người dùng tự đăng xuất thì không nhớ trang (FR-AUTH-04); hết phiên giữa chừng thì nhớ để quay lại.
+    const state: LoginLocationState | undefined = signedOut
+      ? undefined
+      : { from: location.pathname + location.search + location.hash };
     return <Navigate to="/login" replace state={state} />;
   }
 

@@ -11,6 +11,7 @@ import { currentUserKeys } from "@/lib/auth/use-current-user";
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<AuthStatus>("loading");
+  const [signedOut, setSignedOut] = useState(false);
   // Lỗi tạm thời (mất mạng, máy chủ lỗi) khi khôi phục phiên lúc mở ứng dụng.
   const [restoreError, setRestoreError] = useState<unknown>(null);
   // Nhiều yêu cầu đang chạy cùng nhận ACCOUNT_LOCKED hay cùng hết phiên: chỉ xử lý lần đầu, không hiện nhiều thông báo.
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (accessToken: string) => {
       setAccessToken(accessToken);
       sessionEndedRef.current = false;
+      setSignedOut(false);
       // Dữ liệu đã tải là của phiên trước, có thể của tài khoản khác trên cùng điện thoại.
       // Chỉ bỏ query, không bỏ mutation: lời gọi đăng nhập đang chạy là một mutation.
       queryClient.removeQueries();
@@ -63,6 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
+  const signOut = useCallback(() => {
+    setSignedOut(true);
+    endSession();
+  }, [endSession]);
+
   useEffect(() => {
     setSessionEndedHandler(endSession);
     return () => setSessionEndedHandler(null);
@@ -73,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setPermissionsChangedHandler(null);
   }, [queryClient]);
 
-  const value = useMemo(() => ({ status, signIn }), [status, signIn]);
+  const value = useMemo(() => ({ status, signedOut, signIn, signOut }), [status, signedOut, signIn, signOut]);
 
   if (restoreError !== null) {
     return (
