@@ -43,7 +43,7 @@ export function ProfileForm({ user }: { user: CurrentUserResponse }) {
   }
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
+    <form noValidate onSubmit={form.handleSubmit(onSubmit, () => setSubmitError(null))} className="flex flex-col gap-5">
       <FieldGroup>
         <Controller
           name="fullName"

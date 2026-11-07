@@ -3,18 +3,15 @@ import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
-import { showSuccess } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useChangePassword } from "@/features/auth/queries";
 import { type ChangePasswordFormValues, changePasswordSchema } from "@/features/auth/schemas";
-import { useAuth } from "@/lib/auth/auth-context";
 import { setFieldErrors } from "@/lib/form-errors";
 
 /** Đổi mật khẩu của chính mình (FR-AUTH-05). Thành công thì mọi phiên kết thúc, người dùng đăng nhập lại. */
 export function ChangePasswordForm() {
-  const { signOut } = useAuth();
   const changePassword = useChangePassword();
   const [submitError, setSubmitError] = useState<unknown>(null);
   const form = useForm<ChangePasswordFormValues>({
@@ -24,12 +21,8 @@ export function ChangePasswordForm() {
 
   function onSubmit(values: ChangePasswordFormValues) {
     setSubmitError(null);
+    // Thành công: useChangePassword báo và kết thúc phiên.
     changePassword.mutate(values, {
-      onSuccess: () => {
-        showSuccess("Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.");
-        // Backend đã thu hồi mọi refresh token, kể cả của phiên này (BR-USR-04).
-        signOut();
-      },
       // INVALID_CREDENTIALS (sai mật khẩu hiện tại) hiện nguyên văn câu backend; giữ dữ liệu đã nhập.
       onError: (error) => {
         if (!setFieldErrors(error, form.setError, ["currentPassword", "newPassword"])) {
@@ -40,7 +33,7 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
+    <form noValidate onSubmit={form.handleSubmit(onSubmit, () => setSubmitError(null))} className="flex flex-col gap-5">
       <FieldGroup>
         <Controller
           name="currentPassword"

@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { showSuccess } from "@/components/common/toast";
 import { changePassword, login, logout, register, updateProfile } from "@/features/auth/api";
+import { useAuth } from "@/lib/auth/auth-context";
 import { currentUserKeys } from "@/lib/auth/use-current-user";
 
 export function useLogin() {
@@ -10,12 +12,24 @@ export function useRegister() {
   return useMutation({ mutationFn: register });
 }
 
+// Kết thúc phiên ở `onSuccess` của useMutation, không ở callback của `mutate`: callback của `mutate` không chạy
+// nếu người dùng đã rời trang, khi đó backend đã thu hồi phiên mà giao diện vẫn như đang đăng nhập.
+
 export function useLogout() {
-  return useMutation({ mutationFn: logout });
+  const { signOut } = useAuth();
+  return useMutation({ mutationFn: logout, onSuccess: signOut });
 }
 
+/** Đổi mật khẩu xong thì backend thu hồi mọi phiên, kể cả phiên này (BR-USR-04): báo rồi về trang đăng nhập. */
 export function useChangePassword() {
-  return useMutation({ mutationFn: changePassword });
+  const { signOut } = useAuth();
+  return useMutation({
+    mutationFn: changePassword,
+    onSuccess: () => {
+      showSuccess("Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.");
+      signOut();
+    },
+  });
 }
 
 export function useUpdateProfile() {

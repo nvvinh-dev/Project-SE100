@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { ChangePasswordForm } from "@/features/auth/components/ChangePasswordForm";
 import { ProfileForm } from "@/features/auth/components/ProfileForm";
 import { useLogout } from "@/features/auth/queries";
-import { useAuth } from "@/lib/auth/auth-context";
 import type { CurrentUserResponse } from "@/lib/auth/types";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { userRoleLabels } from "@/lib/enum-labels";
@@ -46,7 +45,6 @@ export function AccountPage() {
 }
 
 function LogoutSection() {
-  const { signOut } = useAuth();
   const logout = useLogout();
 
   return (
@@ -59,7 +57,7 @@ function LogoutSection() {
           variant="outline"
           className="self-start"
           disabled={logout.isPending}
-          onClick={() => logout.mutate(undefined, { onSuccess: signOut })}
+          onClick={() => logout.mutate()}
         >
           {logout.isPending ? <Loader2Icon data-icon="inline-start" className="animate-spin" /> : <LogOutIcon data-icon="inline-start" />}
           Đăng xuất
