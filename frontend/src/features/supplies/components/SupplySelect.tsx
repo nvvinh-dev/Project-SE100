@@ -12,13 +12,15 @@ interface SupplySelectProps {
   /** Chỉ liệt kê vật tư ở trạng thái này: nhập kho chỉ `Active`; điều chỉnh để trống vì vật tư ngừng dùng vẫn điều chỉnh được. */
   status?: RecordStatus;
   invalid?: boolean;
+  /** Dùng làm bộ lọc: dòng trống chọn được, mang nhãn này (ví dụ "Tất cả vật tư"). Form nhập liệu để trống. */
+  emptyLabel?: string;
 }
 
 // Mỗi lần chỉ tải một trang; danh sách dài thì người dùng gõ để tìm.
 const PAGE_SIZE = 100;
 
 /** Ô chọn vật tư, có ô tìm kiếm phía trên danh sách (mẫu trang form). */
-export function SupplySelect({ id, value, onChange, status, invalid = false }: SupplySelectProps) {
+export function SupplySelect({ id, value, onChange, status, invalid = false, emptyLabel }: SupplySelectProps) {
   const [search, setSearch] = useState("");
   const supplies = useSupplies({ search: search.trim() || undefined, status, page: 1, pageSize: PAGE_SIZE });
   const selected = useSupply(value);
@@ -40,11 +42,11 @@ export function SupplySelect({ id, value, onChange, status, invalid = false }: S
         className="w-full"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        required
+        required={emptyLabel === undefined}
         aria-invalid={invalid}
       >
-        <NativeSelectOption value="" disabled>
-          Chọn vật tư
+        <NativeSelectOption value="" disabled={emptyLabel === undefined}>
+          {emptyLabel ?? "Chọn vật tư"}
         </NativeSelectOption>
         {showSelected && (
           <NativeSelectOption value={selected.data.id}>

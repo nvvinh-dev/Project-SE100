@@ -17,13 +17,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StockLevelBadge } from "@/features/supplies/components/StockLevelBadge";
+import { SupplyStockHistory } from "@/features/supplies/components/SupplyStockHistory";
 import { useSupply } from "@/features/supplies/queries";
 import { ApiError } from "@/lib/api-error";
 import { ACCESS, canAccess } from "@/lib/auth/access";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { supplyGroupLabels } from "@/lib/enum-labels";
 
-/** `/supplies/:id`: chi tiết vật tư. Lịch sử giao dịch của vật tư thêm ở FR-SUP-08. */
+/** `/supplies/:id`: chi tiết vật tư, kèm lịch sử giao dịch của riêng vật tư đó với Chủ hộ, TV+Kho. */
 export function SupplyDetailPage() {
   const { id = "" } = useParams();
   const supply = useSupply(id);
@@ -127,6 +128,9 @@ export function SupplyDetailPage() {
           </InfoRow>
         </dl>
       </section>
+
+      {/* Lịch sử giao dịch có đơn giá, giá trị nên chỉ Chủ hộ, TV+Kho thấy. */}
+      {canSeePrices && <SupplyStockHistory supplyId={data.id} />}
     </div>
   );
 }

@@ -95,3 +95,42 @@ export interface CreateStockTransactionRequest {
   note: string | null;
   requestId: string;
 }
+
+/** Một dòng của lịch sử giao dịch kho. `quantity` có dấu như trong database. */
+export interface StockTransactionListItem {
+  id: string;
+  transactionDate: string;
+  supplyId: string;
+  supplyCode: string;
+  supplyName: string;
+  unit: Unit;
+  type: StockTransactionType;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  seasonId: string | null;
+  cropName: string | null;
+  plotCode: string | null;
+  seasonStartDate: string | null;
+  reason: string | null;
+  note: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  /** Giao dịch xuất sinh từ công việc, chỉ sửa được qua công việc (BR-TSK-11). */
+  isFromFarmTask: boolean;
+}
+
+/** Tham số lịch sử giao dịch kho; `from`, `to` lọc theo ngày giao dịch. */
+export interface StockTransactionQuery extends PageQuery {
+  supplyId?: string;
+  type?: StockTransactionType;
+  from?: string;
+  to?: string;
+  seasonId?: string;
+  includeVoided?: boolean;
+}
+
+/** Hủy giao dịch kho, bắt buộc lý do (BR-GEN-06). */
+export interface VoidStockTransactionRequest {
+  reason: string;
+}
