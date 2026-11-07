@@ -1,6 +1,11 @@
 import type { UseFormSetError } from "react-hook-form";
 import { z } from "zod";
-import type { CreateSupplyRequest, SupplyResponse, UpdateSupplyRequest } from "@/features/supplies/types";
+import type {
+  CreateStockTransactionRequest,
+  CreateSupplyRequest,
+  SupplyResponse,
+  UpdateSupplyRequest,
+} from "@/features/supplies/types";
 import { ApiError } from "@/lib/api-error";
 import { recordStatuses, supplyGroups, units } from "@/lib/enums";
 import { setFieldErrors } from "@/lib/form-errors";
@@ -140,4 +145,84 @@ export function setSupplyFieldErrors(error: unknown, setError: UseFormSetError<S
     return true;
   }
   return setFieldErrors(error, setError, formFields);
+}
+
+/** Ngày hôm nay theo giờ Việt Nam dạng `yyyy-MM-dd`, không theo múi giờ của máy (BR-GEN-05). */
+export function todayInVietnam(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+
+// Ô số lượng bắt buộc của form kho: số dương, đúng số chữ số của cột quantity.
+const positiveQuantity = z
+  .string()
+  .trim()
+  .min(1, { error: "Vui lòng nhập số lượng.", abort: true })
+  .refine((text) => parseDecimalInput(text) !== null, { error: "Số lượng phải là số, ví dụ 10 hoặc 10,5.", abort: true })
+  .refine((text) => (parseDecimalInput(text) ?? 0) > 0, { error: "Số lượng phải lớn hơn 0.", abort: true })
+  .refine((text) => QUANTITY_PATTERN.test(text), { error: "Số lượng tối đa 3 chữ số sau dấu phẩy." });
+
+const transactionDate = z
+  .string()
+  .min(1, { error: "Vui lòng chọn ngày.", abort: true })
+  .refine((date) => date <= todayInVietnam(), { error: "Ngày không được sau hôm nay." });
+
+export const stockInFormSchema = z.object({
+  supplyId: z.string().min(1, { error: "Vui lòng chọn vật tư." }),
+  quantity: positiveQuantity,
+  unitCost: z
+    .string()
+    .trim()
+    .min(1, { error: "Vui lòng nhập đơn giá nhập.", abort: true })
+    .refine((text) => parseDecimalInput(text) !== null, { error: "Đơn giá phải là số, ví dụ 20000.", abort: true })
+    .refine((text) => (parseDecimalInput(text) ?? 0) >= 0, { error: "Đơn giá nhập không được âm.", abort: true })
+    .refine((text) => PRICE_PATTERN.test(text), { error: "Đơn giá tối đa 4 chữ số sau dấu phẩy." }),
+  transactionDate,
+  note: z.string().trim(),
+});
+
+export type StockInFormValues = z.input<typeof stockInFormSchema>;
+export type StockInFormOutput = z.output<typeof stockInFormSchema>;
+
+export function toStockInRequest(values: StockInFormOutput, requestId: string): CreateStockTransactionRequest {
+  return {
+    type: "In",
+    supplyId: values.supplyId,
+    // Schema đã bảo đảm hai ô số hợp lệ.
+    quantity: parseDecimalInput(values.quantity) ?? 0,
+    unitCost: parseDecimalInput(values.unitCost) ?? 0,
+    transactionDate: values.transactionDate,
+    seasonId: null,
+    reason: null,
+    note: emptyToNull(values.note),
+    requestId,
+  };
+}
+
+export const stockAdjustFormSchema = z.object({
+  supplyId: z.string().min(1, { error: "Vui lòng chọn vật tư." }),
+  direction: z.enum(["increase", "decrease"]),
+  quantity: positiveQuantity,
+  // BR-GEN-06: lý do không rỗng sau khi bỏ khoảng trắng.
+  reason: z.string().trim().min(1, { error: "Vui lòng nhập lý do điều chỉnh." }),
+  transactionDate,
+  note: z.string().trim(),
+});
+
+export type StockAdjustFormValues = z.input<typeof stockAdjustFormSchema>;
+export type StockAdjustFormOutput = z.output<typeof stockAdjustFormSchema>;
+
+export function toStockAdjustRequest(values: StockAdjustFormOutput, requestId: string): CreateStockTransactionRequest {
+  const quantity = parseDecimalInput(values.quantity) ?? 0;
+  return {
+    type: "Adjustment",
+    supplyId: values.supplyId,
+    // BR-SUP-09: có dấu, tăng dương, giảm âm.
+    quantity: values.direction === "increase" ? quantity : -quantity,
+    unitCost: null,
+    transactionDate: values.transactionDate,
+    seasonId: null,
+    reason: values.reason,
+    note: emptyToNull(values.note),
+    requestId,
+  };
 }

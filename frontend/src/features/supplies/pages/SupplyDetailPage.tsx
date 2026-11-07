@@ -1,4 +1,4 @@
-import { EllipsisVerticalIcon, PencilIcon } from "lucide-react";
+import { ArrowUpDownIcon, EllipsisVerticalIcon, PackagePlusIcon, PencilIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { NotFoundPage } from "@/app/pages/NotFoundPage";
@@ -54,7 +54,7 @@ export function SupplyDetailPage() {
         backTo="/supplies"
         action={
           // Thao tác phụ nằm trong menu ⋯; thao tác không được phép thì ẩn hẳn.
-          <PermissionGate allowed={canEdit}>
+          <PermissionGate allowed={canEdit || canSeePrices}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Thao tác khác">
@@ -62,12 +62,30 @@ export function SupplyDetailPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild className="min-h-11">
-                  <Link to={`/supplies/${data.id}/edit`}>
-                    <PencilIcon />
-                    Sửa vật tư
-                  </Link>
-                </DropdownMenuItem>
+                {canSeePrices && (
+                  <>
+                    <DropdownMenuItem asChild className="min-h-11">
+                      <Link to={`/stock/in?supplyId=${data.id}`}>
+                        <PackagePlusIcon />
+                        Nhập kho
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className="min-h-11">
+                      <Link to={`/stock/adjust?supplyId=${data.id}`}>
+                        <ArrowUpDownIcon />
+                        Điều chỉnh tồn
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canEdit && (
+                  <DropdownMenuItem asChild className="min-h-11">
+                    <Link to={`/supplies/${data.id}/edit`}>
+                      <PencilIcon />
+                      Sửa vật tư
+                    </Link>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </PermissionGate>

@@ -1,11 +1,13 @@
 import type {
+  CreateStockTransactionRequest,
   CreateSupplyRequest,
+  StockTransactionResponse,
   SupplyListItem,
   SupplyQuery,
   SupplyResponse,
   UpdateSupplyRequest,
 } from "@/features/supplies/types";
-import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
+import { apiClient, type PageMeta, type ResponseEnvelope, type ResponseWarning } from "@/lib/api-client";
 
 /** Một trang của danh sách: `items` là `data`, thông tin trang ở `meta`. */
 export interface SupplyPage {
@@ -33,4 +35,15 @@ export async function createSupply(request: CreateSupplyRequest): Promise<Supply
 export async function updateSupply(id: string, request: UpdateSupplyRequest): Promise<SupplyResponse> {
   const response = await apiClient.put<ResponseEnvelope<SupplyResponse>>(`/supplies/${id}`, request);
   return response.data.data;
+}
+
+/** Kết quả tạo giao dịch kho: `warnings` hiện bằng toast (`LOW_STOCK`, `NEGATIVE_STOCK`). */
+export interface StockTransactionResult {
+  transaction: StockTransactionResponse;
+  warnings: ResponseWarning[];
+}
+
+export async function createStockTransaction(request: CreateStockTransactionRequest): Promise<StockTransactionResult> {
+  const response = await apiClient.post<ResponseEnvelope<StockTransactionResponse>>("/stock-transactions", request);
+  return { transaction: response.data.data, warnings: response.data.warnings };
 }
