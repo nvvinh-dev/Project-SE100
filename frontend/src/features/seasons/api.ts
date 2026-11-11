@@ -1,9 +1,12 @@
 import type {
+  CreateSeasonRequest,
+  CropOptionItem,
   SeasonListItem,
   SeasonOptionItem,
   SeasonOptionQuery,
   SeasonQuery,
   SeasonResponse,
+  UpdateSeasonRequest,
 } from "@/features/seasons/types";
 import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
 
@@ -34,4 +37,29 @@ export async function getSeasonOptions(query: SeasonOptionQuery): Promise<Season
 export async function getSeason(id: string): Promise<SeasonResponse> {
   const response = await apiClient.get<ResponseEnvelope<SeasonResponse>>(`/seasons/${id}`);
   return response.data.data;
+}
+
+// Tạo mùa vụ mới (FR-SEA-01).
+export async function createSeason(request: CreateSeasonRequest): Promise<SeasonResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SeasonResponse>>("/seasons", request);
+  return response.data.data;
+}
+
+// Sửa thông tin mùa vụ (FR-SEA-07).
+export async function updateSeason(id: string, request: UpdateSeasonRequest): Promise<SeasonResponse> {
+  const response = await apiClient.put<ResponseEnvelope<SeasonResponse>>(`/seasons/${id}`, request);
+  return response.data.data;
+}
+
+// Lấy danh sách cây trồng đang hoạt động để chọn khi tạo mùa vụ (FR-SEA-01, FR-SEA-02).
+export async function getActiveCrops(): Promise<CropOptionItem[]> {
+  try {
+    const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
+      params: { status: "Active", pageSize: 100 },
+    });
+    return response.data.data;
+  } catch {
+    // Khi module cây trồng chưa triển khai endpoint /crops, trả mảng rỗng để giao diện không bị sập
+    return [];
+  }
 }
