@@ -205,3 +205,30 @@ export interface HouseholdMemberOption {
   phoneNumber?: string;
   isLocked?: boolean;
 }
+
+// Dòng kế hoạch vật tư dự kiến của mùa vụ (FR-SEA-04, BR-SEA-09).
+export interface SeasonSupplyPlanResponse {
+  id: string;
+  seasonId: string;
+  supplyId: string;
+  supplyName: string;
+  unit: Unit;
+  plannedQuantity: number;
+  currentStock: number;
+  minStockLevel: number;
+  warningCode?: "SUPPLY_SHORTAGE" | "LOW_STOCK" | null;
+  version: number;
+}
+
+// Yêu cầu khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04, BR-SEA-10).
+export interface CreateSeasonSupplyPlanRequest {
+  seasonId: string;
+  supplyId: string;
+  plannedQuantity: number;
+}
+
+// Yêu cầu cập nhật lượng vật tư dự kiến của mùa vụ (FR-SEA-04, BR-SEA-10).
+export interface UpdateSeasonSupplyPlanRequest {
+  plannedQuantity: number;
+  version: number;
+}

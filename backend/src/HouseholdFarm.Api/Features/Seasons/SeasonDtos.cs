@@ -272,5 +272,36 @@ public sealed record UpdateSeasonNoteRequest(
     string Content,
     uint Version);
 
+/// <summary>
+/// Dòng kế hoạch vật tư dự kiến của mùa vụ (FR-SEA-04, BR-SEA-09).
+/// </summary>
+public sealed record SeasonSupplyPlanResponse(
+    Guid Id,
+    Guid SeasonId,
+    Guid SupplyId,
+    string SupplyName,
+    Unit Unit,
+    decimal PlannedQuantity,
+    decimal CurrentStock,
+    decimal MinStockLevel,
+    string? WarningCode,
+    uint Version);
+
+/// <summary>
+/// Yêu cầu khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04, BR-SEA-10).
+/// </summary>
+public sealed record CreateSeasonSupplyPlanRequest(
+    Guid SeasonId,
+    Guid SupplyId,
+    decimal PlannedQuantity);
+
+/// <summary>
+/// Yêu cầu cập nhật lượng vật tư dự kiến của mùa vụ (FR-SEA-04, BR-SEA-10).
+/// </summary>
+public sealed record UpdateSeasonSupplyPlanRequest(
+    decimal PlannedQuantity,
+    uint Version);
+
+
 
 
