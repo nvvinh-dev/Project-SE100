@@ -6,16 +6,19 @@ import {
   MoreVerticalIcon,
   PlayIcon,
   PlusIcon,
+  RotateCcwIcon,
   SproutIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { DateText } from "@/components/common/DateText";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { LoadingState } from "@/components/common/LoadingState";
 import { MoneyText } from "@/components/common/MoneyText";
 import { PageHeader } from "@/components/common/PageHeader";
 import { QuantityText } from "@/components/common/QuantityText";
+import { ReasonDialog } from "@/components/common/ReasonDialog";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { showError, showSuccess } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
@@ -27,7 +30,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SeasonNotesTab } from "@/features/seasons/components/SeasonNotesTab";
-import { useSeasonDetail, useStartSeason } from "@/features/seasons/queries";
+import {
+  useCancelSeason,
+  useCloseSeason,
+  useReopenSeason,
+  useSeasonDetail,
+  useStartSeason,
+} from "@/features/seasons/queries";
+import { ApiError, type ConfirmationItem, getConfirmationItems } from "@/lib/api-error";
 
 type TabKey = "overview" | "tasks" | "harvests" | "finance" | "notes";
 
@@ -36,9 +46,32 @@ export function SeasonDetailPage() {
   const navigate = useNavigate();
   const { data: season, isLoading, error } = useSeasonDetail(id);
   const startMutation = useStartSeason(id);
+  const closeMutation = useCloseSeason(id);
+  const cancelMutation = useCancelSeason(id);
+  const reopenMutation = useReopenSeason(id);
 
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [starting, setStarting] = useState(false);
+
+  // Trạng thái chốt mùa vụ (FR-SEA-09, BR-SEA-05, BR-GEN-14)
+  const [closing, setClosing] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [closeConfirmationItems, setCloseConfirmationItems] = useState<readonly ConfirmationItem[]>([]);
+  const [closeConfirmationMessage, setCloseConfirmationMessage] = useState("");
+
+  // Trạng thái hủy mùa vụ (FR-SEA-10, BR-SEA-06, BR-GEN-06, BR-GEN-14)
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReasonDialogOpen, setCancelReasonDialogOpen] = useState(false);
+  const [savedCancelReason, setSavedCancelReason] = useState("");
+  const [cancelError, setCancelError] = useState<unknown>(null);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [cancelConfirmationItems, setCancelConfirmationItems] = useState<readonly ConfirmationItem[]>([]);
+  const [cancelConfirmationMessage, setCancelConfirmationMessage] = useState("");
+
+  // Trạng thái mở lại mùa vụ (FR-SEA-14, BR-SEA-08, BR-GEN-06)
+  const [reopening, setReopening] = useState(false);
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [reopenError, setReopenError] = useState<unknown>(null);
 
   if (isLoading) {
     return <LoadingState variant="detail" />;
@@ -62,6 +95,64 @@ export function SeasonDetailPage() {
       showError(err);
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleClose = async (confirmed?: boolean) => {
+    setClosing(true);
+    try {
+      await closeMutation.mutateAsync({ confirmed });
+      setConfirmCloseOpen(false);
+      showSuccess("Đã chốt mùa vụ thành công!");
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "CONFIRMATION_REQUIRED") {
+        setCloseConfirmationItems(getConfirmationItems(err));
+        setCloseConfirmationMessage(err.message);
+        setConfirmCloseOpen(true);
+      } else {
+        showError(err);
+      }
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const handleCancel = async (reason: string, confirmed?: boolean) => {
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await cancelMutation.mutateAsync({ reason, confirmed });
+      setCancelReasonDialogOpen(false);
+      setConfirmCancelOpen(false);
+      showSuccess("Đã hủy mùa vụ thành công!");
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "CONFIRMATION_REQUIRED") {
+        setSavedCancelReason(reason);
+        setCancelConfirmationItems(getConfirmationItems(err));
+        setCancelConfirmationMessage(err.message);
+        setCancelReasonDialogOpen(false);
+        setConfirmCancelOpen(true);
+      } else {
+        setCancelError(err);
+        showError(err);
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleReopen = async (reason: string) => {
+    setReopening(true);
+    setReopenError(null);
+    try {
+      await reopenMutation.mutateAsync({ reason });
+      setReopenDialogOpen(false);
+      showSuccess("Đã mở lại mùa vụ. Sửa xong thì chốt lại mùa vụ.");
+    } catch (err) {
+      setReopenError(err);
+      showError(err);
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -100,12 +191,28 @@ export function SeasonDetailPage() {
                   </DropdownMenuItem>
                 </>
               )}
+              {season.canReopen && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setReopenError(null);
+                      setReopenDialogOpen(true);
+                    }}
+                  >
+                    Mở lại mùa vụ
+                  </DropdownMenuItem>
+                </>
+              )}
               {season.canCancel && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => navigate(`/seasons/${id}/cancel`)}
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => {
+                      setCancelError(null);
+                      setCancelReasonDialogOpen(true);
+                    }}
                   >
                     Hủy mùa vụ
                   </DropdownMenuItem>
@@ -126,6 +233,14 @@ export function SeasonDetailPage() {
           </div>
         </div>
 
+        {/* Thông báo lý do hủy nếu mùa vụ đã hủy */}
+        {season.status === "Cancelled" && season.cancelReason && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+            <span className="font-semibold">Lý do hủy: </span>
+            {season.cancelReason}
+          </div>
+        )}
+
         {/* Sản lượng & tiến độ */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs font-medium">
@@ -144,7 +259,7 @@ export function SeasonDetailPage() {
           </div>
         </div>
 
-        {/* Nút hành động chính */}
+        {/* Nút hành động chính theo trạng thái */}
         {season.canStart && (
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -153,6 +268,30 @@ export function SeasonDetailPage() {
           >
             <PlayIcon className="mr-2 h-4 w-4" />
             {starting ? "Đang xử lý..." : "Bắt đầu mùa vụ"}
+          </Button>
+        )}
+        {season.canClose && (
+          <Button
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            onClick={() => handleClose(false)}
+            disabled={closing}
+          >
+            <CheckCircle2Icon className="mr-2 h-4 w-4" />
+            {closing ? "Đang chốt mùa vụ..." : "Chốt mùa vụ"}
+          </Button>
+        )}
+        {season.canReopen && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setReopenError(null);
+              setReopenDialogOpen(true);
+            }}
+            disabled={reopening}
+          >
+            <RotateCcwIcon className="mr-2 h-4 w-4" />
+            Mở lại mùa vụ
           </Button>
         )}
       </div>
@@ -448,6 +587,63 @@ export function SeasonDetailPage() {
 
       {/* Tab Ghi chú */}
       {activeTab === "notes" && <SeasonNotesTab seasonId={id} />}
+
+      {/* Xác nhận chốt mùa vụ khi còn việc chưa làm (FR-SEA-09, BR-GEN-14) */}
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        onOpenChange={setConfirmCloseOpen}
+        title="Xác nhận chốt mùa vụ"
+        description={
+          closeConfirmationMessage ||
+          "Mùa vụ còn công việc chưa hoàn thành. Các công việc này sẽ được chuyển sang trạng thái Đã hủy."
+        }
+        items={closeConfirmationItems}
+        confirmLabel="Chốt mùa vụ"
+        onConfirm={() => void handleClose(true)}
+        pending={closing}
+        destructive
+      />
+
+      {/* Hộp thoại nhập lý do hủy mùa vụ (FR-SEA-10, BR-GEN-06) */}
+      <ReasonDialog
+        open={cancelReasonDialogOpen}
+        onOpenChange={setCancelReasonDialogOpen}
+        title="Hủy mùa vụ"
+        description="Vật tư đã xuất vẫn tính là chi phí của mùa vụ. Muốn trả vật tư chưa dùng về kho thì hủy giao dịch xuất trước."
+        confirmLabel="Hủy mùa vụ"
+        onConfirm={(reason) => void handleCancel(reason, false)}
+        pending={cancelling}
+        error={cancelError}
+        destructive
+      />
+
+      {/* Xác nhận hủy mùa vụ khi còn việc chưa làm (FR-SEA-10, BR-GEN-14) */}
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        onOpenChange={setConfirmCancelOpen}
+        title="Xác nhận hủy mùa vụ"
+        description={
+          cancelConfirmationMessage ||
+          "Mùa vụ còn công việc chưa hoàn thành. Các công việc này sẽ được chuyển sang trạng thái Đã hủy."
+        }
+        items={cancelConfirmationItems}
+        confirmLabel="Hủy mùa vụ"
+        onConfirm={() => void handleCancel(savedCancelReason, true)}
+        pending={cancelling}
+        destructive
+      />
+
+      {/* Hộp thoại nhập lý do mở lại mùa vụ (FR-SEA-14, BR-GEN-06) */}
+      <ReasonDialog
+        open={reopenDialogOpen}
+        onOpenChange={setReopenDialogOpen}
+        title="Mở lại mùa vụ"
+        description="Mở lại mùa vụ đã chốt về trạng thái Đang canh tác để điều chỉnh dữ liệu. Bắt buộc nhập lý do."
+        confirmLabel="Mở lại mùa vụ"
+        onConfirm={(reason) => void handleReopen(reason)}
+        pending={reopening}
+        error={reopenError}
+      />
     </div>
   );
 }

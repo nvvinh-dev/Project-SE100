@@ -35,5 +35,26 @@ public sealed class SeasonsController(ISeasonService seasonService) : Controller
     [HttpPost("{id:guid}/start")]
     public async Task<ActionResult<SeasonResponse>> StartAsync(Guid id, CancellationToken ct) =>
         Ok(await seasonService.StartAsync(id, ct));
+
+    [HttpPost("{id:guid}/close")]
+    public async Task<ActionResult<SeasonResponse>> CloseAsync(
+        Guid id,
+        CloseSeasonRequest request,
+        CancellationToken ct) =>
+        Ok(await seasonService.CloseAsync(id, request, ct));
+
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<ActionResult<SeasonResponse>> CancelAsync(
+        Guid id,
+        CancelSeasonRequest request,
+        CancellationToken ct) =>
+        Ok(await seasonService.CancelAsync(id, request, ct));
+
+    [HttpPost("{id:guid}/reopen")]
+    public async Task<ActionResult<SeasonResponse>> ReopenAsync(
+        Guid id,
+        ReopenSeasonRequest request,
+        CancellationToken ct) =>
+        Ok(await seasonService.ReopenAsync(id, request, ct));
 }
 

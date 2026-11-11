@@ -1,6 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   assignSeason,
+  cancelSeason,
+  closeSeason,
   createSeason,
   createSeasonNote,
   createSeasonSupplyPlan,
@@ -14,6 +16,7 @@ import {
   getSeasonOptions,
   getSeasons,
   getSeasonSupplyPlans,
+  reopenSeason,
   startSeason,
   unassignSeason,
   updateSeason,
@@ -21,10 +24,13 @@ import {
   updateSeasonSupplyPlan,
 } from "@/features/seasons/api";
 import type {
+  CancelSeasonRequest,
+  CloseSeasonRequest,
   CreateSeasonAssignmentRequest,
   CreateSeasonNoteRequest,
   CreateSeasonRequest,
   CreateSeasonSupplyPlanRequest,
+  ReopenSeasonRequest,
   SeasonOptionQuery,
   SeasonQuery,
   UnassignSeasonAssignmentRequest,
@@ -118,6 +124,39 @@ export function useStartSeason(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => startSeason(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+    },
+  });
+}
+
+// Chốt mùa vụ (FR-SEA-09, BR-SEA-05, BR-GEN-14).
+export function useCloseSeason(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request?: CloseSeasonRequest) => closeSeason(id, request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+    },
+  });
+}
+
+// Hủy mùa vụ (FR-SEA-10, BR-SEA-06, BR-GEN-06, BR-GEN-14).
+export function useCancelSeason(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: CancelSeasonRequest) => cancelSeason(id, request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+    },
+  });
+}
+
+// Mở lại mùa vụ đã chốt (FR-SEA-14, BR-SEA-08, BR-GEN-06).
+export function useReopenSeason(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: ReopenSeasonRequest) => reopenSeason(id, request),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
     },

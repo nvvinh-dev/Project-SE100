@@ -172,6 +172,22 @@ export interface UnassignSeasonAssignmentRequest {
   confirmed?: boolean;
 }
 
+// Yêu cầu chốt mùa vụ (FR-SEA-09, BR-SEA-05, BR-GEN-14).
+export interface CloseSeasonRequest {
+  confirmed?: boolean;
+}
+
+// Yêu cầu hủy mùa vụ (FR-SEA-10, BR-SEA-06, BR-GEN-06, BR-GEN-14).
+export interface CancelSeasonRequest {
+  reason: string;
+  confirmed?: boolean;
+}
+
+// Yêu cầu mở lại mùa vụ đã chốt (FR-SEA-14, BR-SEA-08, BR-GEN-06).
+export interface ReopenSeasonRequest {
+  reason: string;
+}
+
 // Ghi chú kinh nghiệm mùa vụ (FR-SEA-13).
 export interface SeasonNoteResponse {
   id: string;
