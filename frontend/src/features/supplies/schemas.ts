@@ -226,3 +226,32 @@ export function toStockAdjustRequest(values: StockAdjustFormOutput, requestId: s
     requestId,
   };
 }
+
+export const stockOutFormSchema = z.object({
+  supplyId: z.string().min(1, { error: "Vui lòng chọn vật tư." }),
+  // BR-SUP-06: xuất kho luôn gắn một mùa vụ.
+  seasonId: z.string().min(1, { error: "Vui lòng chọn mùa vụ." }),
+  quantity: positiveQuantity,
+  // Được trước ngày bắt đầu mùa vụ (bón lót, chuẩn bị đất), chỉ không được sau hôm nay.
+  transactionDate,
+  note: z.string().trim(),
+});
+
+export type StockOutFormValues = z.input<typeof stockOutFormSchema>;
+export type StockOutFormOutput = z.output<typeof stockOutFormSchema>;
+
+export function toStockOutRequest(values: StockOutFormOutput, requestId: string): CreateStockTransactionRequest {
+  return {
+    type: "Out",
+    supplyId: values.supplyId,
+    // Gửi lượng dương; backend lưu thành số âm.
+    quantity: parseDecimalInput(values.quantity) ?? 0,
+    // BR-SUP-06: đơn giá là giá vốn bình quân, backend tự lấy.
+    unitCost: null,
+    transactionDate: values.transactionDate,
+    seasonId: values.seasonId,
+    reason: null,
+    note: emptyToNull(values.note),
+    requestId,
+  };
+}

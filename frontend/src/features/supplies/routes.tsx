@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router";
 import type { RouteHandle } from "@/app/route-handle";
 import { StockAdjustPage } from "@/features/supplies/pages/StockAdjustPage";
 import { StockInPage } from "@/features/supplies/pages/StockInPage";
+import { StockOutPage } from "@/features/supplies/pages/StockOutPage";
 import { StockTransactionListPage } from "@/features/supplies/pages/StockTransactionListPage";
 import { SupplyCreatePage } from "@/features/supplies/pages/SupplyCreatePage";
 import { SupplyDetailPage } from "@/features/supplies/pages/SupplyDetailPage";
@@ -26,6 +27,11 @@ export const supplyRoutes: RouteObject[] = [
   {
     path: "/stock/in",
     element: <StockInPage />,
+    handle: { access: ACCESS.stockManager, form: true } satisfies RouteHandle,
+  },
+  {
+    path: "/stock/out",
+    element: <StockOutPage />,
     handle: { access: ACCESS.stockManager, form: true } satisfies RouteHandle,
   },
   {

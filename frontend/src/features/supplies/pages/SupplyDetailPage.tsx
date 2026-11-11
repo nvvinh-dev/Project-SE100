@@ -1,4 +1,4 @@
-import { ArrowUpDownIcon, EllipsisVerticalIcon, PackagePlusIcon, PencilIcon } from "lucide-react";
+import { ArrowUpDownIcon, EllipsisVerticalIcon, PackageMinusIcon, PackagePlusIcon, PencilIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { NotFoundPage } from "@/app/pages/NotFoundPage";
@@ -69,6 +69,12 @@ export function SupplyDetailPage() {
                       <Link to={`/stock/in?supplyId=${data.id}`}>
                         <PackagePlusIcon />
                         Nhập kho
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className="min-h-11">
+                      <Link to={`/stock/out?supplyId=${data.id}`}>
+                        <PackageMinusIcon />
+                        Xuất kho
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className="min-h-11">

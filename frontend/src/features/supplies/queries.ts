@@ -8,6 +8,7 @@ import {
   updateSupply,
   voidStockTransaction,
 } from "@/features/supplies/api";
+import { seasonKeys } from "@/features/seasons/queries";
 import type { StockTransactionQuery, SupplyQuery, UpdateSupplyRequest, VoidStockTransactionRequest } from "@/features/supplies/types";
 
 export const supplyKeys = {
@@ -55,11 +56,12 @@ export function useCreateStockTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createStockTransaction,
-    // Tồn, giá vốn của vật tư và lịch sử kho đều đổi theo giao dịch kho.
-    onSuccess: () =>
+    // Tồn, giá vốn của vật tư và lịch sử kho đều đổi theo giao dịch kho; xuất kho còn đổi chi phí vật tư của mùa vụ.
+    onSuccess: (_data, request) =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: supplyKeys.all }),
         queryClient.invalidateQueries({ queryKey: stockTransactionKeys.all }),
+        ...(request.type === "Out" ? [queryClient.invalidateQueries({ queryKey: seasonKeys.all })] : []),
       ]),
   });
 }
