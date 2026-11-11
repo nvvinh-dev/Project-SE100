@@ -21,25 +21,6 @@ export const seasonOperations = [
 
 export type SeasonOperation = (typeof seasonOperations)[number];
 
-// Yêu cầu tạo mùa vụ mới (FR-SEA-01). Mùa vụ mới luôn ở trạng thái Planned.
-export interface CreateSeasonRequest {
-  plotId: string;
-  cropId: string;
-  startDate: string;
-  expectedHarvestDate: string;
-  targetYield: number;
-}
-
-// Yêu cầu sửa mùa vụ (FR-SEA-07, BR-GEN-11).
-export interface UpdateSeasonRequest {
-  plotId: string;
-  cropId: string;
-  startDate: string;
-  expectedHarvestDate: string;
-  targetYield: number;
-  version: number;
-}
-
 // Chi tiết một mùa vụ (FR-SEA-01, FR-SEA-12).
 export interface SeasonResponse {
   id: string;

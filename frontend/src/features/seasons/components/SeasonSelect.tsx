@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useSeason, useSeasonOptions } from "@/features/seasons/queries";
@@ -16,9 +18,24 @@ export interface SeasonSelectProps {
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
+  /**
+   * Bật nạp chi tiết khi giá trị chọn không nằm trong danh sách lựa chọn hợp lệ.
+   * Chỉ nên bật khi sửa bản ghi cũ (mùa vụ đã đóng/hủy sau khi ghi), KHÔNG bật cho form tạo mới
+   * để tránh chọn mùa vụ không hợp lệ qua tham số `?seasonId=`.
+   */
+  allowInactiveFallback?: boolean;
 }
 
-/** Ô chọn mùa vụ dùng chung, có ô tìm kiếm phía trên danh sách (FR-SEA-11). */
+/**
+ * Ô chọn mùa vụ dùng chung, có ô tìm kiếm phía trên danh sách (FR-SEA-11).
+ *
+ * Cách dùng cho các trang form (`/tasks/new`, `/stock/out`, `/sales/new`, `/expenses/new`):
+ * - Truyền `operation` tương ứng (`ManageFarmTasks`, `StockOut`, `ManageSales`, `ManageExpenses`...)
+ *   để backend lọc đúng mùa vụ theo trạng thái (BR-SEA-10) và quyền ngoài phân công (BR-USR-13).
+ * - Tự động nhận `?seasonId=` trên đường dẫn khi `value` chưa có và mùa vụ đó hợp lệ.
+ * - Khi làm form sửa bản ghi lịch sử cũ (mùa vụ có thể đã đóng), truyền `allowInactiveFallback={true}`
+ *   để nạp và hiển thị nhãn dự phòng.
+ */
 export function SeasonSelect({
   id,
   value,
@@ -28,10 +45,25 @@ export function SeasonSelect({
   disabled = false,
   required = true,
   placeholder = "Chọn mùa vụ",
+  allowInactiveFallback = false,
 }: SeasonSelectProps) {
   const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const querySeasonId = searchParams.get("seasonId");
+
   const seasonOptions = useSeasonOptions({ operation });
-  const allOptions = seasonOptions.data ?? [];
+  const allOptions = useMemo(() => seasonOptions.data ?? [], [seasonOptions.data]);
+
+  // Tự động nhận giá trị mặc định từ ?seasonId= khi form chưa có giá trị
+  // và mùa vụ đó thuộc danh sách lựa chọn hợp lệ của thao tác hiện tại
+  useEffect(() => {
+    if (!value && querySeasonId && allOptions.length > 0) {
+      const matchingOption = allOptions.find((opt) => opt.id === querySeasonId);
+      if (matchingOption) {
+        onChange(matchingOption.id, matchingOption);
+      }
+    }
+  }, [value, querySeasonId, allOptions, onChange]);
 
   // Lọc theo từ khóa tìm kiếm trên nhãn, tên cây, mã thửa
   const term = search.trim().toLowerCase();
@@ -47,9 +79,10 @@ export function SeasonSelect({
   // Mùa vụ đang chọn có thể không nằm trong kết quả tìm, vẫn phải hiện trong ô
   const isSelectedInFiltered = filteredOptions.some((opt) => opt.id === value);
   const selectedFromAll = allOptions.find((opt) => opt.id === value);
-  // Chỉ gọi API chi tiết khi mùa vụ đang chọn không nằm trong danh sách lựa chọn (ví dụ khi sửa bản ghi cũ)
-  const fallbackSeasonId = !seasonOptions.isPending && !selectedFromAll ? value : "";
-  const singleSeason = useSeason(fallbackSeasonId);
+
+  // Chỉ gọi API chi tiết khi allowInactiveFallback được bật (ví dụ khi sửa bản ghi cũ)
+  const shouldFetchFallback = allowInactiveFallback && !seasonOptions.isPending && !selectedFromAll && Boolean(value);
+  const singleSeason = useSeason(shouldFetchFallback ? value : "");
 
   const fallbackLabel = selectedFromAll
     ? selectedFromAll.label
@@ -81,7 +114,11 @@ export function SeasonSelect({
         aria-invalid={invalid}
       >
         <NativeSelectOption value="" disabled>
-          {seasonOptions.isPending ? "Đang tải danh sách mùa vụ..." : placeholder}
+          {seasonOptions.isPending
+            ? "Đang tải danh sách mùa vụ..."
+            : seasonOptions.isError
+              ? "Lỗi tải danh sách mùa vụ"
+              : placeholder}
         </NativeSelectOption>
         {!isSelectedInFiltered && value && fallbackLabel && (
           <NativeSelectOption value={value}>{fallbackLabel}</NativeSelectOption>
@@ -92,6 +129,21 @@ export function SeasonSelect({
           </NativeSelectOption>
         ))}
       </NativeSelect>
+
+      {seasonOptions.isError && (
+        <div className="flex items-center justify-between text-xs text-destructive">
+          <span>Không thể tải danh sách mùa vụ.</span>
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs text-destructive underline hover:text-destructive/80"
+            onClick={() => void seasonOptions.refetch()}
+          >
+            Thử lại
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

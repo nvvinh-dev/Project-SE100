@@ -35,6 +35,7 @@ export function SeasonListPage() {
   const plots = usePlots({ page: 1, pageSize: PAGE_SIZE_OPTIONS });
 
   // Trích xuất danh sách cây trồng từ dữ liệu mùa vụ để lọc khi chưa có API danh mục cây trồng
+  // TODO(CROP): Thay bằng useCrops() khi module Crops hoàn thiện API danh mục cây trồng để không phụ thuộc vào 100 mùa vụ đầu tiên.
   const allSeasonsForCrops = useSeasons({ page: 1, pageSize: PAGE_SIZE_OPTIONS });
   const cropMap = new Map<string, string>();
   for (const item of allSeasonsForCrops.data?.items ?? []) {
@@ -72,14 +73,14 @@ export function SeasonListPage() {
     query.plotId
       ? {
           key: "plotId",
-          label: `Thửa: ${selectedPlot ? selectedPlot.code : query.plotId}`,
+          label: `Thửa: ${selectedPlot ? selectedPlot.code : "Thửa đã chọn"}`,
           onRemove: () => updateParams({ plotId: undefined }),
         }
       : undefined,
     query.cropId
       ? {
           key: "cropId",
-          label: `Cây: ${selectedCropName}`,
+          label: `Cây: ${selectedCropName ?? "Cây đã chọn"}`,
           onRemove: () => updateParams({ cropId: undefined }),
         }
       : undefined,
@@ -137,7 +138,7 @@ export function SeasonListPage() {
               >
                 <NativeSelectOption value="">Thửa đất: tất cả</NativeSelectOption>
                 {query.plotId && !selectedPlot && (
-                  <NativeSelectOption value={query.plotId}>{query.plotId}</NativeSelectOption>
+                  <NativeSelectOption value={query.plotId}>Thửa đã chọn</NativeSelectOption>
                 )}
                 {plots.data?.items.map((plot) => (
                   <NativeSelectOption key={plot.id} value={plot.id}>
@@ -159,7 +160,7 @@ export function SeasonListPage() {
               >
                 <NativeSelectOption value="">Cây trồng: tất cả</NativeSelectOption>
                 {query.cropId && !cropMap.has(query.cropId) && (
-                  <NativeSelectOption value={query.cropId}>{query.cropId}</NativeSelectOption>
+                  <NativeSelectOption value={query.cropId}>Cây đã chọn</NativeSelectOption>
                 )}
                 {cropOptions.map((crop) => (
                   <NativeSelectOption key={crop.id} value={crop.id}>
@@ -189,7 +190,7 @@ export function SeasonListPage() {
             </div>
 
             <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
-              <label htmlFor="filter-from" className="text-sm font-medium whitespace-nowrap text-muted-foreground">
+              <label htmlFor="filter-from" className="text-sm font-medium whitespace-nowrap">
                 Từ ngày
               </label>
               <Input
@@ -204,7 +205,7 @@ export function SeasonListPage() {
             </div>
 
             <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
-              <label htmlFor="filter-to" className="text-sm font-medium whitespace-nowrap text-muted-foreground">
+              <label htmlFor="filter-to" className="text-sm font-medium whitespace-nowrap">
                 Đến ngày
               </label>
               <Input
@@ -247,7 +248,7 @@ export function SeasonListPage() {
                   <DateText value={season.startDate} /> → <DateText value={season.expectedHarvestDate} />
                 </div>
                 <div>
-                  Mục tiêu: <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                  0 / <QuantityText value={season.targetYield} unit={season.yieldUnit} />
                 </div>
               </div>
             )}
@@ -266,8 +267,12 @@ export function SeasonListPage() {
                 ),
               },
               {
-                header: "Mục tiêu",
-                cell: (season) => <QuantityText value={season.targetYield} unit={season.yieldUnit} />,
+                header: "Sản lượng",
+                cell: (season) => (
+                  <span>
+                    0 / <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                  </span>
+                ),
                 className: "text-right",
               },
               {

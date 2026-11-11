@@ -1,6 +1,6 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createSeason, getSeason, getSeasonOptions, getSeasons, updateSeason } from "@/features/seasons/api";
-import type { SeasonOptionQuery, SeasonQuery, UpdateSeasonRequest } from "@/features/seasons/types";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { getSeason, getSeasonOptions, getSeasons } from "@/features/seasons/api";
+import type { SeasonOptionQuery, SeasonQuery } from "@/features/seasons/types";
 
 export const seasonKeys = {
   all: ["seasons"] as const,
@@ -32,23 +32,5 @@ export function useSeason(id: string) {
     queryKey: seasonKeys.detail(id),
     queryFn: () => getSeason(id),
     enabled: Boolean(id),
-  });
-}
-
-// Mutation tạo mùa vụ (FR-SEA-01).
-export function useCreateSeason() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createSeason,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: seasonKeys.all }),
-  });
-}
-
-// Mutation sửa mùa vụ (FR-SEA-07).
-export function useUpdateSeason(id: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (request: UpdateSeasonRequest) => updateSeason(id, request),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: seasonKeys.all }),
   });
 }
