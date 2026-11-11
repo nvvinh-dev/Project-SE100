@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using HouseholdFarm.Api.Common.Auditing;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Domain.Enums;
+using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -494,7 +496,11 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
 
         await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
-        var seasonService = new SeasonService(db, TestCurrentUser.For(household.Owner));
+        var user = TestCurrentUser.For(household.Owner);
+        var clock = TestClock.At(DateTimeOffset.UtcNow);
+        var audit = new DummyAuditLogger();
+        var produceStock = new ProduceStockService();
+        var seasonService = new SeasonService(db, user, clock, audit, produceStock);
 
         // Chưa bật AllowOverlappingSeasons: ném SEASON_PLOT_BUSY
         var ex = await Assert.ThrowsAsync<AppException>(
@@ -627,6 +633,11 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var client = factory.CreateClientFor(household.Worker);
         var response = await client.GetAsync($"{SeasonsPath}/{season.Id}", ct);
         await response.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
+    }
+
+    private sealed class DummyAuditLogger : IAuditLogger
+    {
+        public void Log(string action, Guid? entityId, object? oldValues, object? newValues, string? reason) { }
     }
 }
 

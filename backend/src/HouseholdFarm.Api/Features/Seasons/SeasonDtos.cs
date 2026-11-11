@@ -171,5 +171,106 @@ public sealed record SeasonOptionItem(
     DateOnly StartDate,
     DateOnly ExpectedHarvestDate);
 
+/// <summary>
+/// Tóm tắt tồn nông sản theo loại chất lượng của mùa vụ (FR-SEA-12).
+/// </summary>
+public sealed record ProduceStockSummaryItem(
+    QualityGrade Grade,
+    decimal Quantity,
+    Unit Unit);
+
+/// <summary>
+/// Tóm tắt tài chính của mùa vụ dành cho người có quyền Quản lý tài chính (FR-SEA-12, BR-USR-13).
+/// </summary>
+public sealed record SeasonFinancialSummary(
+    decimal TotalExpense,
+    decimal TotalRevenue,
+    decimal EstimatedProfit);
+
+/// <summary>
+/// Người được phân công vào mùa vụ (FR-SEA-06, FR-SEA-12).
+/// </summary>
+public sealed record SeasonAssignmentResponse(
+    Guid Id,
+    Guid SeasonId,
+    Guid UserId,
+    string FullName,
+    UserRole Role,
+    string PhoneNumber,
+    DateTime CreatedAt);
+
+/// <summary>
+/// Chi tiết mùa vụ đầy đủ (FR-SEA-12).
+/// </summary>
+public sealed record SeasonDetailResponse(
+    Guid Id,
+    Guid PlotId,
+    string PlotCode,
+    Guid CropId,
+    string CropName,
+    Unit YieldUnit,
+    DateOnly StartDate,
+    DateOnly ExpectedHarvestDate,
+    decimal TargetYield,
+    SeasonStatus Status,
+    DateTime? StartedAt,
+    DateTime? ClosedAt,
+    DateTime? CancelledAt,
+    string? CancelReason,
+    uint Version,
+    decimal HarvestedYield,
+    int CompletedTasksCount,
+    int TotalTasksCount,
+    IReadOnlyList<ProduceStockSummaryItem> ProduceStocks,
+    SeasonFinancialSummary? FinancialSummary,
+    IReadOnlyList<SeasonAssignmentResponse> Assignments,
+    bool IsOutOfScope,
+    bool CanEdit,
+    bool CanStart,
+    bool CanClose,
+    bool CanCancel,
+    bool CanReopen);
+
+/// <summary>
+/// Yêu cầu phân công người vào mùa vụ (FR-SEA-06).
+/// </summary>
+public sealed record CreateSeasonAssignmentRequest(
+    Guid SeasonId,
+    Guid UserId);
+
+/// <summary>
+/// Yêu cầu thu hồi phân công người khỏi mùa vụ (FR-SEA-06, BR-USR-12, BR-GEN-14).
+/// </summary>
+public sealed record UnassignSeasonAssignmentRequest(
+    bool Confirmed = false);
+
+/// <summary>
+/// Bản ghi ghi chú kinh nghiệm mùa vụ (FR-SEA-13).
+/// </summary>
+public sealed record SeasonNoteResponse(
+    Guid Id,
+    Guid SeasonId,
+    string Content,
+    Guid CreatedById,
+    string AuthorName,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    uint Version,
+    bool CanEdit);
+
+/// <summary>
+/// Yêu cầu tạo ghi chú kinh nghiệm mùa vụ (FR-SEA-13, BR-SEA-11).
+/// </summary>
+public sealed record CreateSeasonNoteRequest(
+    Guid SeasonId,
+    string Content);
+
+/// <summary>
+/// Yêu cầu sửa ghi chú kinh nghiệm mùa vụ (FR-SEA-13, BR-SEA-11).
+/// </summary>
+public sealed record UpdateSeasonNoteRequest(
+    string Content,
+    uint Version);
+
 
 

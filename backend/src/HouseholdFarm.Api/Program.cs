@@ -86,6 +86,8 @@ builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPlotService, PlotService>();
 builder.Services.AddScoped<ISeasonService, SeasonService>();
+builder.Services.AddScoped<ISeasonAssignmentService, SeasonAssignmentService>();
+builder.Services.AddScoped<ISeasonNoteService, SeasonNoteService>();
 builder.Services.AddScoped<ISupplyService, SupplyService>();
 builder.Services.AddScoped<StockLedger>();
 builder.Services.AddScoped<StockOperations>();
