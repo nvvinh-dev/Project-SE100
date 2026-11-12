@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ReactNode, useState } from "react";
 import { Controller, useForm, type UseFormSetError, useWatch } from "react-hook-form";
+import { Link } from "react-router";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { FormActionBar } from "@/components/common/FormActionBar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -98,7 +99,7 @@ export function SeasonForm({
               />
               {isLockedPlotAndCrop && (
                 <FieldDescription>
-                  Mùa vụ đang canh tác không thể thay đổi thửa đất (BR-SEA-10).
+                  Mùa vụ đang canh tác không thể thay đổi thửa đất.
                 </FieldDescription>
               )}
               <FieldError errors={[fieldState.error]} />
@@ -128,7 +129,7 @@ export function SeasonForm({
               />
               {isLockedPlotAndCrop && (
                 <FieldDescription>
-                  Mùa vụ đang canh tác không thể thay đổi cây trồng (BR-SEA-10).
+                  Mùa vụ đang canh tác không thể thay đổi cây trồng.
                 </FieldDescription>
               )}
               <FieldError errors={[fieldState.error]} />
@@ -218,7 +219,11 @@ export function SeasonForm({
             <Alert>
               <AlertDescription>
                 Lưu ý: Nếu hộ có nhu cầu trồng xen nhiều mùa vụ trên cùng một thửa, Chủ hộ có thể bật tùy chọn
-                &quot;Cho phép mùa vụ chồng lấn&quot; tại phần Cài đặt hộ.
+                &quot;Cho phép mùa vụ chồng lấn&quot; tại phần{" "}
+                <Link to="/household/settings" className="font-medium underline hover:text-primary">
+                  Cài đặt hộ
+                </Link>
+                .
               </AlertDescription>
             </Alert>
           )}

@@ -4,6 +4,7 @@ using HouseholdFarm.Api.Common.Auditing;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Domain.Enums;
 using HouseholdFarm.Api.Features.Harvests;
+using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -499,8 +500,9 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var user = TestCurrentUser.For(household.Owner);
         var clock = TestClock.At(DateTimeOffset.UtcNow);
         var audit = new DummyAuditLogger();
-        var produceStock = new ProduceStockService();
-        var seasonService = new SeasonService(db, user, clock, audit, produceStock);
+        var produceStock = new ProduceStockService(db);
+        var finance = new SeasonFinanceService();
+        var seasonService = new SeasonService(db, user, clock, audit, produceStock, finance);
 
         // Chưa bật AllowOverlappingSeasons: ném SEASON_PLOT_BUSY
         var ex = await Assert.ThrowsAsync<AppException>(
@@ -622,7 +624,7 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await responseOtherCrop.AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
     }
 
-    [Fact(DisplayName = "BR-USR-14: Nhân công xem chi tiết mùa vụ trả FORBIDDEN")]
+    [Fact(DisplayName = "BR-USR-14, BR-GEN-02: Nhân công xem chi tiết mùa vụ trả NOT_FOUND")]
     public async Task Get_ByWorker_ReturnsForbidden()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -632,7 +634,7 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var client = factory.CreateClientFor(household.Worker);
         var response = await client.GetAsync($"{SeasonsPath}/{season.Id}", ct);
-        await response.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
+        await response.AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
     }
 
     private sealed class DummyAuditLogger : IAuditLogger

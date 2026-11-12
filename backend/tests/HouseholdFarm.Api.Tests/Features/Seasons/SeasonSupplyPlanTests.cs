@@ -161,7 +161,7 @@ public class SeasonSupplyPlanTests(ApiFactory factory) : IClassFixture<ApiFactor
         var request = new CreateSeasonSupplyPlanRequest(season.Id, supply.Id, 10m);
         var response = await client.PostAsJsonAsync(SupplyPlansPath, request, ct);
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await response.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
     }
 
     [Fact(DisplayName = "FR-SEA-04: Chủ hộ sửa lượng vật tư dự kiến và cập nhật cảnh báo")]
@@ -188,6 +188,81 @@ public class SeasonSupplyPlanTests(ApiFactory factory) : IClassFixture<ApiFactor
 
         Assert.Equal(60m, updatedData.GetProperty("plannedQuantity").GetDecimal());
         Assert.Equal(WarningCodes.SupplyShortage, updatedData.GetProperty("warningCode").GetString());
+    }
+
+    [Fact(DisplayName = "BR-SEA-10: Sửa lượng vật tư dự kiến khi mùa vụ InProgress trả SEASON_INVALID_STATE")]
+    public async Task Update_WhenSeasonNotPlanned_ReturnsSeasonInvalidState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
+        var supply = await SupplyTestData.CreateSupplyAsync(factory.Postgres, household, "VT001", ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var createRes = await client.PostAsJsonAsync(SupplyPlansPath, new CreateSeasonSupplyPlanRequest(season.Id, supply.Id, 20m), ct);
+        Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
+        var plan = (await createRes.ReadJsonAsync(ct)).GetProperty("data");
+        var planId = plan.GetProperty("id").GetGuid();
+        var version = plan.GetProperty("version").GetUInt32();
+
+        // Chuyển mùa vụ sang InProgress
+        await using (var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner)))
+        {
+            var s = await db.Seasons.FindAsync([season.Id], ct);
+            s!.Status = SeasonStatus.InProgress;
+            await db.SaveChangesAsync(ct);
+        }
+
+        var updateRes = await client.PutAsJsonAsync($"{SupplyPlansPath}/{planId}", new UpdateSeasonSupplyPlanRequest(30m, version), ct);
+        await updateRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
+    }
+
+    [Fact(DisplayName = "BR-GEN-11: Sửa vật tư dự kiến với phiên bản cũ trả CONCURRENCY_CONFLICT")]
+    public async Task Update_WhenVersionMismatch_ReturnsConcurrencyConflict()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
+        var supply = await SupplyTestData.CreateSupplyAsync(factory.Postgres, household, "VT001", ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var createRes = await client.PostAsJsonAsync(SupplyPlansPath, new CreateSeasonSupplyPlanRequest(season.Id, supply.Id, 20m), ct);
+        Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
+        var plan = (await createRes.ReadJsonAsync(ct)).GetProperty("data");
+        var planId = plan.GetProperty("id").GetGuid();
+        var version = plan.GetProperty("version").GetUInt32();
+
+        // Sửa với version sai
+        var updateRes = await client.PutAsJsonAsync($"{SupplyPlansPath}/{planId}", new UpdateSeasonSupplyPlanRequest(30m, version + 99), ct);
+        await updateRes.AssertProblemAsync(HttpStatusCode.Conflict, ErrorCodes.ConcurrencyConflict, ct);
+    }
+
+    [Fact(DisplayName = "BR-SEA-10: Xóa vật tư dự kiến khi mùa vụ InProgress trả SEASON_INVALID_STATE")]
+    public async Task Delete_WhenSeasonNotPlanned_ReturnsSeasonInvalidState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
+        var supply = await SupplyTestData.CreateSupplyAsync(factory.Postgres, household, "VT001", ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var createRes = await client.PostAsJsonAsync(SupplyPlansPath, new CreateSeasonSupplyPlanRequest(season.Id, supply.Id, 20m), ct);
+        Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
+        var planId = (await createRes.ReadJsonAsync(ct)).GetProperty("data").GetProperty("id").GetGuid();
+
+        // Chuyển mùa vụ sang InProgress
+        await using (var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner)))
+        {
+            var s = await db.Seasons.FindAsync([season.Id], ct);
+            s!.Status = SeasonStatus.InProgress;
+            await db.SaveChangesAsync(ct);
+        }
+
+        var deleteRes = await client.DeleteAsync($"{SupplyPlansPath}/{planId}", ct);
+        await deleteRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
     }
 
     [Fact(DisplayName = "BR-SEA-10, data model 2.6: Xóa thật dòng vật tư dự kiến khi mùa vụ Planned")]

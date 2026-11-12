@@ -7,6 +7,7 @@ import {
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
+  SparklesIcon,
   SproutIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -23,6 +24,14 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { showError, showSuccess } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,12 +47,15 @@ import {
   useStartSeason,
 } from "@/features/seasons/queries";
 import { ApiError, type ConfirmationItem, getConfirmationItems } from "@/lib/api-error";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 type TabKey = "overview" | "tasks" | "harvests" | "finance" | "notes";
 
 export function SeasonDetailPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const { data: user } = useCurrentUser();
+  const isOwner = user?.role === "Owner";
   const { data: season, isLoading, error } = useSeasonDetail(id);
   const startMutation = useStartSeason(id);
   const closeMutation = useCloseSeason(id);
@@ -52,12 +64,14 @@ export function SeasonDetailPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [starting, setStarting] = useState(false);
+  const [showStartConfirm, setShowStartConfirm] = useState(false);
 
   // Trạng thái chốt mùa vụ (FR-SEA-09, BR-SEA-05, BR-GEN-14)
   const [closing, setClosing] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [closeConfirmationItems, setCloseConfirmationItems] = useState<readonly ConfirmationItem[]>([]);
   const [closeConfirmationMessage, setCloseConfirmationMessage] = useState("");
+  const [produceRemainingMessage, setProduceRemainingMessage] = useState<string | null>(null);
 
   // Trạng thái hủy mùa vụ (FR-SEA-10, BR-SEA-06, BR-GEN-06, BR-GEN-14)
   const [cancelling, setCancelling] = useState(false);
@@ -87,10 +101,11 @@ export function SeasonDetailPage() {
   }
 
   const handleStart = async () => {
+    setShowStartConfirm(false);
     setStarting(true);
     try {
       await startMutation.mutateAsync();
-      showSuccess("Mùa vụ đã bắt đầu canh tác!");
+      showSuccess("Mùa vụ đã bắt đầu canh tác");
     } catch (err) {
       showError(err);
     } finally {
@@ -103,12 +118,14 @@ export function SeasonDetailPage() {
     try {
       await closeMutation.mutateAsync({ confirmed });
       setConfirmCloseOpen(false);
-      showSuccess("Đã chốt mùa vụ thành công!");
+      showSuccess("Đã chốt mùa vụ");
     } catch (err) {
       if (err instanceof ApiError && err.code === "CONFIRMATION_REQUIRED") {
         setCloseConfirmationItems(getConfirmationItems(err));
         setCloseConfirmationMessage(err.message);
         setConfirmCloseOpen(true);
+      } else if (err instanceof ApiError && err.code === "SEASON_PRODUCE_REMAINING") {
+        setProduceRemainingMessage(err.message);
       } else {
         showError(err);
       }
@@ -124,7 +141,7 @@ export function SeasonDetailPage() {
       await cancelMutation.mutateAsync({ reason, confirmed });
       setCancelReasonDialogOpen(false);
       setConfirmCancelOpen(false);
-      showSuccess("Đã hủy mùa vụ thành công!");
+      showSuccess("Đã hủy mùa vụ");
     } catch (err) {
       if (err instanceof ApiError && err.code === "CONFIRMATION_REQUIRED") {
         setSavedCancelReason(reason);
@@ -133,8 +150,8 @@ export function SeasonDetailPage() {
         setCancelReasonDialogOpen(false);
         setConfirmCancelOpen(true);
       } else {
+        // Chỉ truyền lỗi vào ReasonDialog qua state cancelError, không gọi showError toast để tránh trùng lặp
         setCancelError(err);
-        showError(err);
       }
     } finally {
       setCancelling(false);
@@ -149,8 +166,8 @@ export function SeasonDetailPage() {
       setReopenDialogOpen(false);
       showSuccess("Đã mở lại mùa vụ. Sửa xong thì chốt lại mùa vụ.");
     } catch (err) {
+      // Chỉ truyền lỗi vào ReasonDialog qua state reopenError, không gọi showError toast để tránh trùng lặp
       setReopenError(err);
-      showError(err);
     } finally {
       setReopening(false);
     }
@@ -181,15 +198,15 @@ export function SeasonDetailPage() {
                   Sửa mùa vụ
                 </DropdownMenuItem>
               )}
+              {!season.isOutOfScope && isOwner && (
+                <DropdownMenuItem onClick={() => navigate(`/seasons/${id}/members`)}>
+                  Phân công thành viên
+                </DropdownMenuItem>
+              )}
               {!season.isOutOfScope && (
-                <>
-                  <DropdownMenuItem onClick={() => navigate(`/seasons/${id}/members`)}>
-                    Phân công thành viên
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(`/seasons/${id}/supply-plans`)}>
-                    Vật tư dự kiến
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={() => navigate(`/seasons/${id}/supply-plans`)}>
+                  Vật tư dự kiến
+                </DropdownMenuItem>
               )}
               {season.canReopen && (
                 <>
@@ -233,10 +250,10 @@ export function SeasonDetailPage() {
           </div>
         </div>
 
-        {/* Thông báo lý do hủy nếu mùa vụ đã hủy */}
+        {/* Thông báo lý do hủy nếu mùa vụ đã hủy: dùng nền trung tính */}
         {season.status === "Cancelled" && season.cancelReason && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-            <span className="font-semibold">Lý do hủy: </span>
+          <div className="rounded-md border border-muted-foreground/20 bg-muted/50 p-3 text-xs text-foreground">
+            <span className="font-semibold text-muted-foreground">Lý do hủy: </span>
             {season.cancelReason}
           </div>
         )}
@@ -263,7 +280,7 @@ export function SeasonDetailPage() {
         {season.canStart && (
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={handleStart}
+            onClick={() => setShowStartConfirm(true)}
             disabled={starting}
           >
             <PlayIcon className="mr-2 h-4 w-4" />
@@ -361,6 +378,19 @@ export function SeasonDetailPage() {
       {/* Nội dung Tab */}
       {activeTab === "overview" && (
         <div className="space-y-4">
+          {/* Placeholder tóm tắt mùa vụ bằng AI khi mùa vụ đã chốt (FR-AI-01) */}
+          {season.status === "Closed" && (
+            <div className="rounded-lg border border-dashed bg-card p-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <SparklesIcon className="h-4 w-4 text-amber-500" />
+                <span>Tóm tắt mùa vụ bằng AI</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tính năng phân tích và tổng kết kinh nghiệm mùa vụ bằng AI đang được phát triển.
+              </p>
+            </div>
+          )}
+
           {/* Hướng dẫn khi mùa vụ Planned */}
           {season.status === "Planned" && !season.isOutOfScope && (
             <div className="rounded-lg border bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-3">
@@ -419,54 +449,58 @@ export function SeasonDetailPage() {
             </div>
           )}
 
-          {/* Tồn nông sản */}
-          <div className="rounded-lg border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Tồn nông sản</span>
-              <Button variant="link" size="sm" asChild className="p-0 h-auto">
-                <Link to="/produce-stock">Xem kho nông sản ›</Link>
-              </Button>
-            </div>
-            {season.produceStocks.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Chưa có tồn nông sản.</p>
-            ) : (
-              <div className="space-y-2">
-                {season.produceStocks.map((stock) => (
-                  <div
-                    key={stock.grade}
-                    className="flex items-center justify-between rounded-md bg-muted/40 p-2.5 text-sm"
-                  >
-                    <span>
-                      {stock.grade === "Grade1"
-                        ? "Loại 1"
-                        : stock.grade === "Grade2"
-                          ? "Loại 2"
-                          : "Loại 3"}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-semibold">
-                        <QuantityText value={stock.quantity} unit={stock.unit} />
-                      </span>
-                      {stock.quantity > 0 && (
-                        <Button size="sm" variant="outline" asChild className="h-7 text-xs">
-                          <Link to={`/sales/new?seasonId=${id}&grade=${stock.grade}`}>Bán</Link>
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+          {/* Tồn nông sản (BR-USR-13: chỉ hiển thị khi trong phân công hoặc có ManageFinance) */}
+          {(!season.isOutOfScope || user?.canManageFinance) && (
+            <div className="rounded-lg border bg-card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Tồn nông sản</span>
+                <Button variant="link" size="sm" asChild className="p-0 h-auto">
+                  <Link to="/produce-stock">Xem kho nông sản ›</Link>
+                </Button>
               </div>
-            )}
-          </div>
+              {season.produceStocks.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Chưa có tồn nông sản.</p>
+              ) : (
+                <div className="space-y-2">
+                  {season.produceStocks.map((stock) => (
+                    <div
+                      key={stock.grade}
+                      className="flex items-center justify-between rounded-md bg-muted/40 p-2.5 text-sm"
+                    >
+                      <span>
+                        {stock.grade === "Grade1"
+                          ? "Loại 1"
+                          : stock.grade === "Grade2"
+                            ? "Loại 2"
+                            : "Loại 3"}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold">
+                          <QuantityText value={stock.quantity} unit={stock.unit} />
+                        </span>
+                        {stock.quantity > 0 && (
+                          <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+                            <Link to={`/sales/new?seasonId=${id}&grade=${stock.grade}`}>Bán</Link>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Người được phân công */}
           {!season.isOutOfScope && (
             <div className="rounded-lg border bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Người được phân công</span>
-                <Button variant="link" size="sm" asChild className="p-0 h-auto">
-                  <Link to={`/seasons/${id}/members`}>Quản lý ›</Link>
-                </Button>
+                {isOwner && (
+                  <Button variant="link" size="sm" asChild className="p-0 h-auto">
+                    <Link to={`/seasons/${id}/members`}>Quản lý ›</Link>
+                  </Button>
+                )}
               </div>
               {season.assignments.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Chưa có người được phân công.</p>
@@ -588,6 +622,17 @@ export function SeasonDetailPage() {
       {/* Tab Ghi chú */}
       {activeTab === "notes" && <SeasonNotesTab seasonId={id} />}
 
+      {/* Xác nhận bắt đầu mùa vụ */}
+      <ConfirmDialog
+        open={showStartConfirm}
+        onOpenChange={setShowStartConfirm}
+        title="Bắt đầu mùa vụ?"
+        description="Mùa vụ sẽ chuyển sang trạng thái Đang canh tác. Bạn sẽ không thể quay lại trạng thái Lên kế hoạch."
+        confirmLabel="Bắt đầu mùa vụ"
+        onConfirm={() => void handleStart()}
+        pending={starting}
+      />
+
       {/* Xác nhận chốt mùa vụ khi còn việc chưa làm (FR-SEA-09, BR-GEN-14) */}
       <ConfirmDialog
         open={confirmCloseOpen}
@@ -603,6 +648,27 @@ export function SeasonDetailPage() {
         pending={closing}
         destructive
       />
+
+      {/* Hộp thoại thông báo khi không thể chốt do còn tồn nông sản */}
+      <Dialog
+        open={Boolean(produceRemainingMessage)}
+        onOpenChange={(open) => !open && setProduceRemainingMessage(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Không thể chốt mùa vụ</DialogTitle>
+            <DialogDescription>{produceRemainingMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button variant="outline" onClick={() => setProduceRemainingMessage(null)}>
+              Đóng
+            </Button>
+            <Button asChild onClick={() => setProduceRemainingMessage(null)}>
+              <Link to={`/produce-stock?seasonId=${id}`}>Xem tồn nông sản</Link>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Hộp thoại nhập lý do hủy mùa vụ (FR-SEA-10, BR-GEN-06) */}
       <ReasonDialog

@@ -8,6 +8,7 @@ using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
 using HouseholdFarm.Api.Features.Harvests;
+using HouseholdFarm.Api.Features.Reports.Finance;
 using Microsoft.EntityFrameworkCore;
 
 namespace HouseholdFarm.Api.Features.Seasons;
@@ -17,7 +18,8 @@ public sealed class SeasonService(
     ICurrentUser currentUser,
     IAppClock clock,
     IAuditLogger audit,
-    IProduceStockService produceStockService) : ISeasonService
+    IProduceStockService produceStockService,
+    ISeasonFinanceService seasonFinanceService) : ISeasonService
 {
     public async Task<PagedResult<SeasonListItem>> GetListAsync(SeasonQuery query, CancellationToken ct)
     {
@@ -82,12 +84,34 @@ public sealed class SeasonService(
         // Ma trận phân quyền: Nhân công không được xem danh sách mùa vụ
         currentUser.EnsureNotWorker();
 
-        if (query.Operation is null)
-        {
-            throw new AppException(ErrorCodes.ValidationError, "Vui lòng chọn loại thao tác.");
-        }
+        IReadOnlyCollection<SeasonStatus> allowedStatuses;
+        ExtraPermission? outOfScopePermission = null;
 
-        var (allowedStatuses, outOfScopePermission) = SeasonStateRules.GetRule(query.Operation.Value);
+        if (query.Operation.HasValue)
+        {
+            // Khi thực hiện thao tác ghi: áp dụng quy tắc trạng thái bảng 4.3 và quyền mở rộng (BR-SEA-10, BR-USR-13)
+            (allowedStatuses, outOfScopePermission) = SeasonStateRules.GetRule(query.Operation.Value);
+        }
+        else
+        {
+            // Khi dùng làm ô lọc xem dữ liệu (Read-only / Filter):
+            // 1. Cho phép tất cả trạng thái mùa vụ (gồm cả Closed, Cancelled)
+            allowedStatuses = [SeasonStatus.Planned, SeasonStatus.InProgress, SeasonStatus.Closed, SeasonStatus.Cancelled];
+
+            // 2. BR-USR-13: Mở rộng phạm vi toàn hộ theo quyền chỉ định hoặc quyền sẵn có của user
+            if (query.Permission.HasValue)
+            {
+                outOfScopePermission = query.Permission.Value;
+            }
+            else if (currentUser.HasPermission(ExtraPermission.ManageStock))
+            {
+                outOfScopePermission = ExtraPermission.ManageStock;
+            }
+            else if (currentUser.HasPermission(ExtraPermission.ManageFinance))
+            {
+                outOfScopePermission = ExtraPermission.ManageFinance;
+            }
+        }
 
         // BR-USR-13: Thành viên có quyền Kho hoặc TC thấy thêm mùa vụ ngoài phân công khi thực hiện thao tác tương ứng
         var seasons = db.Seasons.AsNoTracking();
@@ -95,7 +119,7 @@ public sealed class SeasonService(
             ? seasons.VisibleTo(currentUser, outOfScopePermission.Value)
             : seasons.VisibleTo(currentUser);
 
-        // Lọc theo các trạng thái được phép thao tác theo BR-SEA-10
+        // Lọc theo các trạng thái được phép theo quy tắc
         var items = await seasons
             .Where(s => allowedStatuses.Contains(s.Status))
             .OrderByDescending(s => s.StartDate)
@@ -163,18 +187,9 @@ public sealed class SeasonService(
         db.Seasons.Add(season);
         await db.SaveChangesAsync(ct);
 
-        return new SeasonResponse(
-            season.Id,
-            plot.Id,
-            plot.Code,
-            crop.Id,
-            crop.Name,
-            crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        season.Plot = plot;
+        season.Crop = crop;
+        return MapToResponse(season);
     }
 
     public async Task<SeasonResponse> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct)
@@ -235,18 +250,7 @@ public sealed class SeasonService(
 
         await db.SaveChangesAsync(ct);
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
 
     private async Task<Plot> EnsurePlotActiveAsync(Guid plotId, CancellationToken ct)
@@ -403,8 +407,11 @@ public sealed class SeasonService(
 
     public async Task<SeasonDetailResponse> GetDetailAsync(Guid id, CancellationToken ct)
     {
-        // Ma trận phân quyền: Nhân công không được xem chi tiết mùa vụ
-        currentUser.EnsureNotWorker();
+        // Ma trận phân quyền: Nhân công không được xem chi tiết mùa vụ (BR-GEN-02)
+        if (currentUser.Role == UserRole.Worker)
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
 
         var isOwner = currentUser.Role == UserRole.Owner;
         var isInScope = isOwner || currentUser.AssignedSeasonIds.Contains(id);
@@ -455,50 +462,11 @@ public sealed class SeasonService(
                 .Where(t => t.SeasonId == id && t.Status != FarmTaskStatus.Cancelled);
             totalTasksCount = await tasksQuery.CountAsync(ct);
             completedTasksCount = await tasksQuery.CountAsync(t => t.Status == FarmTaskStatus.Done, ct);
-
-            // Tổng sản lượng thu hoạch chưa Void
-            harvestedYield = await db.HarvestRecords
-                .AsNoTracking()
-                .Where(h => h.SeasonId == id && h.VoidedAt == null)
-                .SumAsync(h => (decimal?)h.Quantity, ct) ?? 0m;
-
-            // Tồn nông sản theo loại chất lượng
-            try
-            {
-                var stocks = await produceStockService.GetStockAsync(id, ct);
-                produceStocks = stocks.Select(p => new ProduceStockSummaryItem(
-                    p.QualityGrade,
-                    p.Quantity,
-                    season.Crop.YieldUnit)).ToList();
-            }
-            catch (NotImplementedException)
-            {
-                produceStocks = [
-                    new(QualityGrade.Grade1, 0, season.Crop.YieldUnit),
-                    new(QualityGrade.Grade2, 0, season.Crop.YieldUnit),
-                    new(QualityGrade.Grade3, 0, season.Crop.YieldUnit),
-                ];
-            }
-
-            // Tóm tắt tài chính dành cho Chủ hộ hoặc người có quyền ManageFinance (BR-USR-13)
-            if (isOwner || currentUser.CanManageFinance)
-            {
-                var totalExpense = await db.Expenses
-                    .AsNoTracking()
-                    .Where(e => e.SeasonId == id && e.VoidedAt == null)
-                    .SumAsync(e => (decimal?)e.Amount, ct) ?? 0m;
-
-                var totalRevenue = await db.Sales
-                    .AsNoTracking()
-                    .Where(s => s.SeasonId == id && s.VoidedAt == null)
-                    .SumAsync(s => (decimal?)(s.Quantity * s.UnitPrice), ct) ?? 0m;
-
-                financialSummary = new SeasonFinancialSummary(totalExpense, totalRevenue, totalRevenue - totalExpense);
-            }
         }
-        else if (hasFinanceScope)
+
+        // BR-USR-13: Tồn nông sản và sản lượng thu hoạch chỉ hiển thị cho người trong phạm vi hoặc có ManageFinance
+        if (!isOutOfScope || hasFinanceScope)
         {
-            // Ngoại lệ BR-USR-13: Thành viên có quyền ManageFinance thấy thêm sản lượng, tồn nông sản, phần tài chính
             harvestedYield = await db.HarvestRecords
                 .AsNoTracking()
                 .Where(h => h.SeasonId == id && h.VoidedAt == null)
@@ -520,19 +488,34 @@ public sealed class SeasonService(
                     new(QualityGrade.Grade3, 0, season.Crop.YieldUnit),
                 ];
             }
-
-            var totalExpense = await db.Expenses
-                .AsNoTracking()
-                .Where(e => e.SeasonId == id && e.VoidedAt == null)
-                .SumAsync(e => (decimal?)e.Amount, ct) ?? 0m;
-
-            var totalRevenue = await db.Sales
-                .AsNoTracking()
-                .Where(s => s.SeasonId == id && s.VoidedAt == null)
-                .SumAsync(s => (decimal?)(s.Quantity * s.UnitPrice), ct) ?? 0m;
-
-            financialSummary = new SeasonFinancialSummary(totalExpense, totalRevenue, totalRevenue - totalExpense);
         }
+
+        // BR-USR-13: Tóm tắt tài chính dành cho Chủ hộ hoặc người có quyền ManageFinance (không tự tính, lấy qua ISeasonFinanceService)
+        if (isOwner || currentUser.CanManageFinance)
+        {
+            try
+            {
+                var financeSummaries = await seasonFinanceService.GetAsync([id], ct);
+                var finance = financeSummaries.FirstOrDefault(f => f.SeasonId == id);
+                if (finance is not null)
+                {
+                    financialSummary = new SeasonFinancialSummary(
+                        finance.SupplyCost + finance.ExpenseAmount,
+                        finance.Revenue,
+                        finance.Profit);
+                }
+            }
+            catch (NotImplementedException)
+            {
+                // Khi RPT-FIN chưa hiện thực thì giữ financialSummary = null
+            }
+        }
+
+        var targetYield = isOutOfScope && !hasFinanceScope ? 0m : season.TargetYield;
+        var startedAt = isOutOfScope ? null : season.StartedAt;
+        var closedAt = isOutOfScope ? null : season.ClosedAt;
+        var cancelledAt = isOutOfScope ? null : season.CancelledAt;
+        var cancelReason = isOutOfScope ? null : season.CancelReason;
 
         var canEdit = !isOutOfScope && isOwner && season.Status is SeasonStatus.Planned or SeasonStatus.InProgress;
         var canStart = !isOutOfScope && isOwner && season.Status == SeasonStatus.Planned;
@@ -549,12 +532,12 @@ public sealed class SeasonService(
             season.Crop.YieldUnit,
             season.StartDate,
             season.ExpectedHarvestDate,
-            season.TargetYield,
+            targetYield,
             season.Status,
-            season.StartedAt,
-            season.ClosedAt,
-            season.CancelledAt,
-            season.CancelReason,
+            startedAt,
+            closedAt,
+            cancelledAt,
+            cancelReason,
             season.Version,
             harvestedYield,
             completedTasksCount,
@@ -623,33 +606,23 @@ public sealed class SeasonService(
             await tx.CommitAsync(ct);
         }
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
 
     public async Task<SeasonResponse> CloseAsync(Guid id, CloseSeasonRequest request, CancellationToken ct)
     {
-        // Phân quyền: Chủ hộ HOẶC Thành viên có CanCloseSeason trong phân công (FR-SEA-09, BR-USR-13)
+        // BR-GEN-02: Kiểm tra phạm vi trước để không lộ sự tồn tại của mùa vụ
         var isOwner = currentUser.Role == UserRole.Owner;
+        if (!isOwner && !currentUser.AssignedSeasonIds.Contains(id))
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
+
+        // Phân quyền: Chủ hộ HOẶC Thành viên có CanCloseSeason trong phân công (FR-SEA-09, BR-USR-13)
         var hasPermission = isOwner || (currentUser.Role == UserRole.Member && currentUser.CanCloseSeason);
         if (!hasPermission)
         {
             throw new AppException(ErrorCodes.Forbidden, "Bạn không có quyền chốt mùa vụ này.");
-        }
-
-        if (!isOwner && !currentUser.AssignedSeasonIds.Contains(id))
-        {
-            throw AppException.NotFound("mùa vụ");
         }
 
         if (!currentUser.HouseholdId.HasValue)
@@ -729,18 +702,7 @@ public sealed class SeasonService(
             await tx.CommitAsync(ct);
         }
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
 
     public async Task<SeasonResponse> CancelAsync(Guid id, CancelSeasonRequest request, CancellationToken ct)
@@ -834,18 +796,7 @@ public sealed class SeasonService(
             await tx.CommitAsync(ct);
         }
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
 
     public async Task<SeasonResponse> ReopenAsync(Guid id, ReopenSeasonRequest request, CancellationToken ct)
@@ -902,19 +853,21 @@ public sealed class SeasonService(
             await tx.CommitAsync(ct);
         }
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
+
+    private static SeasonResponse MapToResponse(Season season) => new(
+        season.Id,
+        season.Plot.Id,
+        season.Plot.Code,
+        season.Crop.Id,
+        season.Crop.Name,
+        season.Crop.YieldUnit,
+        season.StartDate,
+        season.ExpectedHarvestDate,
+        season.TargetYield,
+        season.Status,
+        season.Version);
 
     private static string FormatTaskType(FarmTaskType type, string? typeOther) => type switch
     {

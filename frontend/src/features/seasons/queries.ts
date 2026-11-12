@@ -137,6 +137,7 @@ export function useCloseSeason(id: string) {
     mutationFn: (request?: CloseSeasonRequest) => closeSeason(id, request),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ["farm-tasks"] });
     },
   });
 }
@@ -148,6 +149,7 @@ export function useCancelSeason(id: string) {
     mutationFn: (request: CancelSeasonRequest) => cancelSeason(id, request),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ["farm-tasks"] });
     },
   });
 }

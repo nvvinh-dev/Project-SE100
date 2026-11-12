@@ -1,5 +1,7 @@
+using System.Globalization;
 using HouseholdFarm.Api.Common.Auth;
 using HouseholdFarm.Api.Common.Errors;
+using HouseholdFarm.Api.Common.Persistence;
 using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Entities;
@@ -110,14 +112,22 @@ public sealed class SeasonSupplyPlanService(
 
         var plan = new SeasonSupplyPlan
         {
-            HouseholdId = currentUser.HouseholdId!.Value,
             SeasonId = request.SeasonId,
             SupplyId = request.SupplyId,
             PlannedQuantity = request.PlannedQuantity
         };
 
         db.SeasonSupplyPlans.Add(plan);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.IsUniqueViolation<SeasonSupplyPlan>(db, nameof(SeasonSupplyPlan.SeasonId), nameof(SeasonSupplyPlan.SupplyId)))
+        {
+            throw new AppException(
+                ErrorCodes.ValidationError,
+                $"Vật tư '{supply.Name}' đã có trong danh sách dự kiến của mùa vụ này.");
+        }
 
         // BR-SEA-09: kiểm tra cảnh báo tồn kho
         var stockList = await stockService.GetStockAsync([request.SupplyId], ct);
@@ -125,7 +135,7 @@ public sealed class SeasonSupplyPlanService(
         var currentStock = stock?.StockQuantity ?? 0m;
         var minStockLevel = stock?.MinStockLevel ?? 0m;
 
-        var warningCode = EvaluateAndCollectWarning(supply.Name, supply.Unit.ToString(), plan.PlannedQuantity, currentStock, minStockLevel);
+        var warningCode = EvaluateAndCollectWarning(supply.Name, supply.Unit, plan.PlannedQuantity, currentStock, minStockLevel);
 
         return new SeasonSupplyPlanResponse(
             plan.Id,
@@ -171,7 +181,7 @@ public sealed class SeasonSupplyPlanService(
         var currentStock = stock?.StockQuantity ?? 0m;
         var minStockLevel = stock?.MinStockLevel ?? 0m;
 
-        var warningCode = EvaluateAndCollectWarning(plan.Supply.Name, plan.Supply.Unit.ToString(), plan.PlannedQuantity, currentStock, minStockLevel);
+        var warningCode = EvaluateAndCollectWarning(plan.Supply.Name, plan.Supply.Unit, plan.PlannedQuantity, currentStock, minStockLevel);
 
         return new SeasonSupplyPlanResponse(
             plan.Id,
@@ -224,27 +234,54 @@ public sealed class SeasonSupplyPlanService(
         return null;
     }
 
+    private static readonly CultureInfo VietnameseCulture = new("vi-VN");
+
+    private static string FormatQuantity(decimal value) => value.ToString("#,##0.###", VietnameseCulture);
+
+    private static string GetUnitLabel(Unit unit) => unit switch
+    {
+        Unit.Kilogram => "kg",
+        Unit.Gram => "g",
+        Unit.Quintal => "tạ",
+        Unit.Ton => "tấn",
+        Unit.Liter => "lít",
+        Unit.Milliliter => "ml",
+        Unit.Bag => "bao",
+        Unit.Bottle => "chai",
+        Unit.Pack => "gói",
+        Unit.Plant => "cây",
+        Unit.Fruit => "quả",
+        Unit.Bunch => "bó",
+        _ => unit.ToString(),
+    };
+
     // BR-SEA-09: tính mã cảnh báo và ghi vào IWarningCollector
     private string? EvaluateAndCollectWarning(
         string supplyName,
-        string unit,
+        Unit unit,
         decimal plannedQuantity,
         decimal currentStock,
         decimal minStockLevel)
     {
+        var unitLabel = GetUnitLabel(unit);
+        var formattedPlanned = FormatQuantity(plannedQuantity);
+        var formattedStock = FormatQuantity(currentStock);
+        var formattedMin = FormatQuantity(minStockLevel);
+
         if (plannedQuantity > currentStock)
         {
             warnings.Add(
                 WarningCodes.SupplyShortage,
-                $"Lượng dự kiến của vật tư '{supplyName}' ({plannedQuantity} {unit}) lớn hơn tồn kho hiện tại ({currentStock} {unit}).");
+                $"Lượng dự kiến của vật tư '{supplyName}' ({formattedPlanned} {unitLabel}) lớn hơn tồn kho hiện tại ({formattedStock} {unitLabel}).");
             return WarningCodes.SupplyShortage;
         }
 
         if (currentStock - plannedQuantity < minStockLevel)
         {
+            var remaining = FormatQuantity(currentStock - plannedQuantity);
             warnings.Add(
                 WarningCodes.LowStock,
-                $"Tồn kho dự kiến của vật tư '{supplyName}' sau khi dùng còn {currentStock - plannedQuantity} {unit}, thấp hơn ngưỡng tối thiểu ({minStockLevel} {unit}).");
+                $"Tồn kho dự kiến của vật tư '{supplyName}' sau khi dùng còn {remaining} {unitLabel}, thấp hơn ngưỡng tối thiểu ({formattedMin} {unitLabel}).");
             return WarningCodes.LowStock;
         }
 
