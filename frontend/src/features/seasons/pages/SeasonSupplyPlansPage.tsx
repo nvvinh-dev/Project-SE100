@@ -1,12 +1,15 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangleIcon, Edit2Icon, Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useParams } from "react-router";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { DataList, type DataListColumn } from "@/components/common/DataList";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeader } from "@/components/common/PageHeader";
-import { showError, showSuccess } from "@/components/common/toast";
+import { showError, showSuccess, showWarnings } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,9 +29,17 @@ import {
   useSeasonSupplyPlans,
   useUpdateSeasonSupplyPlan,
 } from "@/features/seasons/queries";
+import {
+  editSeasonSupplyPlanSchema,
+  seasonSupplyPlanSchema,
+  setEditSupplyPlanFieldErrors,
+  setSupplyPlanFieldErrors,
+  type EditSeasonSupplyPlanFormValues,
+  type SeasonSupplyPlanFormValues,
+} from "@/features/seasons/schemas";
 import type { SeasonSupplyPlanResponse } from "@/features/seasons/types";
-import { formatQuantity } from "@/lib/format";
 import { unitLabels } from "@/lib/enum-labels";
+import { formatQuantity, parseDecimalInput } from "@/lib/format";
 
 export function SeasonSupplyPlansPage() {
   const { id = "" } = useParams();
@@ -43,81 +54,91 @@ export function SeasonSupplyPlansPage() {
 
   // Modal thêm vật tư
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [selectedSupplyId, setSelectedSupplyId] = useState("");
-  const [plannedQuantity, setPlannedQuantity] = useState("");
   const [addError, setAddError] = useState<unknown>(null);
+
+  const addForm = useForm<SeasonSupplyPlanFormValues>({
+    resolver: zodResolver(seasonSupplyPlanSchema()),
+    defaultValues: {
+      supplyId: "",
+      plannedQuantity: "",
+    },
+  });
 
   // Modal sửa vật tư
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SeasonSupplyPlanResponse | null>(null);
-  const [editQuantity, setEditQuantity] = useState("");
   const [editError, setEditError] = useState<unknown>(null);
+
+  const editForm = useForm<EditSeasonSupplyPlanFormValues>({
+    resolver: zodResolver(editSeasonSupplyPlanSchema()),
+    defaultValues: {
+      plannedQuantity: "",
+    },
+  });
 
   // Modal xác nhận xóa
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingPlan, setDeletingPlan] = useState<SeasonSupplyPlanResponse | null>(null);
 
   const handleOpenAdd = () => {
-    setSelectedSupplyId("");
-    setPlannedQuantity("");
+    addForm.reset({
+      supplyId: "",
+      plannedQuantity: "",
+    });
     setAddError(null);
     setAddModalOpen(true);
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSupplyId || !plannedQuantity) return;
-
-    const qty = Number(plannedQuantity);
-    if (isNaN(qty) || qty <= 0) {
-      showError("Lượng dự kiến phải lớn hơn 0.");
-      return;
-    }
-
+  const handleAddSubmit = async (values: SeasonSupplyPlanFormValues) => {
     try {
       setAddError(null);
-      await createMutation.mutateAsync({
+      const result = await createMutation.mutateAsync({
         seasonId: id,
-        supplyId: selectedSupplyId,
-        plannedQuantity: qty,
+        supplyId: values.supplyId,
+        plannedQuantity: parseDecimalInput(values.plannedQuantity) ?? 0,
       });
       showSuccess("Đã thêm vật tư dự kiến vào mùa vụ.");
+      if (result.warnings && result.warnings.length > 0) {
+        showWarnings(result.warnings);
+      }
       setAddModalOpen(false);
     } catch (err) {
-      setAddError(err);
+      if (!setSupplyPlanFieldErrors(err, addForm.setError)) {
+        setAddError(err);
+      }
     }
   };
 
   const handleOpenEdit = (plan: SeasonSupplyPlanResponse) => {
     setEditingPlan(plan);
-    setEditQuantity(String(plan.plannedQuantity));
+    editForm.reset({
+      plannedQuantity: String(plan.plannedQuantity).replace(".", ","),
+    });
     setEditError(null);
     setEditModalOpen(true);
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPlan || !editQuantity) return;
-
-    const qty = Number(editQuantity);
-    if (isNaN(qty) || qty <= 0) {
-      showError("Lượng dự kiến phải lớn hơn 0.");
-      return;
-    }
+  const handleEditSubmit = async (values: EditSeasonSupplyPlanFormValues) => {
+    if (!editingPlan) return;
 
     try {
       setEditError(null);
-      await updateMutation.mutateAsync({
+      const result = await updateMutation.mutateAsync({
         id: editingPlan.id,
         request: {
-          plannedQuantity: qty,
+          plannedQuantity: parseDecimalInput(values.plannedQuantity) ?? 0,
           version: editingPlan.version,
         },
       });
       showSuccess("Đã cập nhật lượng vật tư dự kiến.");
+      if (result.warnings && result.warnings.length > 0) {
+        showWarnings(result.warnings);
+      }
       setEditModalOpen(false);
     } catch (err) {
-      setEditError(err);
+      if (!setEditSupplyPlanFieldErrors(err, editForm.setError)) {
+        setEditError(err);
+      }
     }
   };
 
@@ -136,6 +157,94 @@ export function SeasonSupplyPlansPage() {
       showError(err);
     }
   };
+
+  const renderWarningBadge = (plan: SeasonSupplyPlanResponse) => {
+    if (plan.warningCode === "SUPPLY_SHORTAGE") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+          <AlertTriangleIcon className="h-3 w-3" />
+          Thiếu vật tư
+        </span>
+      );
+    }
+    if (plan.warningCode === "LOW_STOCK") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+          <AlertTriangleIcon className="h-3 w-3" />
+          Dưới ngưỡng
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const columns: DataListColumn<SeasonSupplyPlanResponse>[] = [
+    {
+      header: "Vật tư",
+      cell: (plan) => <span className="font-medium text-foreground">{plan.supplyName}</span>,
+    },
+    {
+      header: "Lượng dự kiến",
+      className: "text-right",
+      cell: (plan) => (
+        <span className="font-semibold text-foreground">
+          {formatQuantity(plan.plannedQuantity, plan.unit)}
+        </span>
+      ),
+    },
+    {
+      header: "Tồn hiện tại",
+      className: "text-right",
+      cell: (plan) => (
+        <span className="text-muted-foreground">
+          {formatQuantity(plan.currentStock, plan.unit)}
+        </span>
+      ),
+    },
+    {
+      header: "Ngưỡng tối thiểu",
+      className: "text-right",
+      cell: (plan) => (
+        <span className="text-muted-foreground">
+          {formatQuantity(plan.minStockLevel, plan.unit)}
+        </span>
+      ),
+    },
+    {
+      header: "Cảnh báo",
+      cell: (plan) => renderWarningBadge(plan),
+    },
+    ...(isPlanned
+      ? [
+          {
+            header: "Thao tác",
+            className: "text-right",
+            cell: (plan: SeasonSupplyPlanResponse) => (
+              <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenEdit(plan)}
+                  aria-label={`Sửa lượng vật tư ${plan.supplyName}`}
+                >
+                  <Edit2Icon className="mr-1 h-3.5 w-3.5" />
+                  Sửa
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => handleOpenDelete(plan)}
+                  aria-label={`Xóa vật tư ${plan.supplyName}`}
+                >
+                  <Trash2Icon className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   if (isSeasonLoading || isPlansLoading) {
     return <LoadingState variant="detail" />;
@@ -178,76 +287,46 @@ export function SeasonSupplyPlansPage() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-          <div className="divide-y">
-            {plans?.map((plan) => (
-              <div
-                key={plan.id}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-foreground">{plan.supplyName}</span>
-                    {plan.warningCode === "SUPPLY_SHORTAGE" && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
-                        <AlertTriangleIcon className="h-3 w-3" />
-                        Thiếu vật tư
-                      </span>
-                    )}
-                    {plan.warningCode === "LOW_STOCK" && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
-                        <AlertTriangleIcon className="h-3 w-3" />
-                        Dưới ngưỡng
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    <div>
-                      <span>Dự kiến: </span>
-                      <span className="font-semibold text-foreground">
-                        {formatQuantity(plan.plannedQuantity, plan.unit)}
-                      </span>
-                    </div>
-                    <div>
-                      <span>Tồn hiện tại: </span>
-                      <span className="font-medium text-foreground">
-                        {formatQuantity(plan.currentStock, plan.unit)}
-                      </span>
-                    </div>
-                    <div>
-                      <span>Ngưỡng tối thiểu: </span>
-                      <span>{formatQuantity(plan.minStockLevel, plan.unit)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {isPlanned && (
-                  <div className="flex items-center gap-2 self-end sm:self-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenEdit(plan)}
-                      aria-label={`Sửa lượng vật tư ${plan.supplyName}`}
-                    >
-                      <Edit2Icon className="mr-1 h-3.5 w-3.5" />
-                      Sửa
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => handleOpenDelete(plan)}
-                      aria-label={`Xóa vật tư ${plan.supplyName}`}
-                    >
-                      <Trash2Icon className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
+        <DataList
+          items={plans ?? []}
+          getKey={(plan) => plan.id}
+          title={(plan) => plan.supplyName}
+          subtitle={(plan) => (
+            <div className="space-y-1">
+              <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                <span>
+                  Dự kiến: <strong className="text-foreground">{formatQuantity(plan.plannedQuantity, plan.unit)}</strong>
+                </span>
+                <span>Tồn: {formatQuantity(plan.currentStock, plan.unit)}</span>
+                <span>Ngưỡng: {formatQuantity(plan.minStockLevel, plan.unit)}</span>
               </div>
-            ))}
-          </div>
-        </div>
+              {isPlanned && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => handleOpenEdit(plan)}
+                    aria-label={`Sửa lượng vật tư ${plan.supplyName}`}
+                  >
+                    <Edit2Icon className="mr-1 h-3 w-3" /> Sửa
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
+                    onClick={() => handleOpenDelete(plan)}
+                    aria-label={`Xóa vật tư ${plan.supplyName}`}
+                  >
+                    <Trash2Icon className="mr-1 h-3 w-3" /> Xóa
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          badge={(plan) => renderWarningBadge(plan)}
+          columns={columns}
+        />
       )}
 
       {/* Modal Thêm vật tư dự kiến */}
@@ -260,38 +339,51 @@ export function SeasonSupplyPlansPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddSubmit} className="space-y-4">
+          <form onSubmit={addForm.handleSubmit(handleAddSubmit)} className="space-y-4">
             {addError ? <ErrorAlert error={addError} /> : null}
 
             <div className="space-y-2">
               <Label htmlFor="supply-select">Vật tư *</Label>
-              <SupplySelect
-                id="supply-select"
-                value={selectedSupplyId}
-                onChange={setSelectedSupplyId}
-                status="Active"
+              <Controller
+                control={addForm.control}
+                name="supplyId"
+                render={({ field }) => (
+                  <SupplySelect
+                    id="supply-select"
+                    value={field.value}
+                    onChange={field.onChange}
+                    status="Active"
+                  />
+                )}
               />
+              {addForm.formState.errors.supplyId && (
+                <p className="text-sm font-medium text-destructive">
+                  {addForm.formState.errors.supplyId.message}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="planned-quantity">Lượng dự kiến *</Label>
               <Input
                 id="planned-quantity"
-                type="number"
-                step="0.001"
-                min="0.001"
+                type="text"
+                inputMode="decimal"
                 placeholder="Ví dụ: 50"
-                value={plannedQuantity}
-                onChange={(e) => setPlannedQuantity(e.target.value)}
-                required
+                {...addForm.register("plannedQuantity")}
               />
+              {addForm.formState.errors.plannedQuantity && (
+                <p className="text-sm font-medium text-destructive">
+                  {addForm.formState.errors.plannedQuantity.message}
+                </p>
+              )}
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAddModalOpen(false)}>
-                Hủy
+                Quay lại
               </Button>
-              <Button type="submit" disabled={createMutation.isPending || !selectedSupplyId}>
+              <Button type="submit" disabled={createMutation.isPending}>
                 {createMutation.isPending ? (
                   <>
                     <Loader2Icon className="mr-1.5 h-4 w-4 animate-spin" />
@@ -316,25 +408,28 @@ export function SeasonSupplyPlansPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleEditSubmit} className="space-y-4">
+          <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
             {editError ? <ErrorAlert error={editError} /> : null}
 
             <div className="space-y-2">
               <Label htmlFor="edit-planned-quantity">Lượng dự kiến mới *</Label>
               <Input
                 id="edit-planned-quantity"
-                type="number"
-                step="0.001"
-                min="0.001"
-                value={editQuantity}
-                onChange={(e) => setEditQuantity(e.target.value)}
-                required
+                type="text"
+                inputMode="decimal"
+                placeholder="Ví dụ: 50"
+                {...editForm.register("plannedQuantity")}
               />
+              {editForm.formState.errors.plannedQuantity && (
+                <p className="text-sm font-medium text-destructive">
+                  {editForm.formState.errors.plannedQuantity.message}
+                </p>
+              )}
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>
-                Hủy
+                Quay lại
               </Button>
               <Button type="submit" disabled={updateMutation.isPending}>
                 {updateMutation.isPending ? (

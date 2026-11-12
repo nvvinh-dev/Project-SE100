@@ -19,7 +19,7 @@ import type {
   UpdateSeasonRequest,
   UpdateSeasonSupplyPlanRequest,
 } from "@/features/seasons/types";
-import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
+import { apiClient, type PageMeta, type ResponseEnvelope, type ResponseWarning } from "@/lib/api-client";
 
 // Một trang của danh sách: items là data, thông tin trang ở meta.
 export interface SeasonPage {
@@ -93,8 +93,8 @@ export async function unassignSeason(
   id: string,
   request?: UnassignSeasonAssignmentRequest,
 ): Promise<{ success: boolean }> {
-  const response = await apiClient.post<{ success: boolean }>(`/season-assignments/${id}/unassign`, request ?? {});
-  return response.data;
+  const response = await apiClient.post<ResponseEnvelope<{ success: boolean }>>(`/season-assignments/${id}/unassign`, request ?? {});
+  return response.data.data;
 }
 
 // Lấy danh sách ghi chú kinh nghiệm của mùa vụ (FR-SEA-13).
@@ -122,25 +122,16 @@ export async function updateSeasonNote(
 
 // Lấy danh sách thành viên hộ để phân công vào mùa vụ (FR-SEA-06).
 export async function getHouseholdMembers(): Promise<HouseholdMemberOption[]> {
-  try {
-    const response = await apiClient.get<ResponseEnvelope<HouseholdMemberOption[]>>("/members");
-    return response.data.data;
-  } catch {
-    return [];
-  }
+  const response = await apiClient.get<ResponseEnvelope<HouseholdMemberOption[]>>("/members");
+  return response.data.data;
 }
 
 // Lấy danh sách cây trồng đang hoạt động để chọn khi tạo mùa vụ (FR-SEA-01, FR-SEA-02).
 export async function getActiveCrops(): Promise<CropOptionItem[]> {
-  try {
-    const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
-      params: { status: "Active", pageSize: 100 },
-    });
-    return response.data.data;
-  } catch {
-    // Khi module cây trồng chưa triển khai endpoint /crops, trả mảng rỗng để giao diện không bị sập
-    return [];
-  }
+  const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
+    params: { status: "Active", pageSize: 100 },
+  });
+  return response.data.data;
 }
 
 // Lấy danh sách vật tư dự kiến của mùa vụ (FR-SEA-04).
@@ -151,19 +142,25 @@ export async function getSeasonSupplyPlans(seasonId: string): Promise<SeasonSupp
   return response.data.data;
 }
 
-// Khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04).
-export async function createSeasonSupplyPlan(data: CreateSeasonSupplyPlanRequest): Promise<SeasonSupplyPlanResponse> {
-  const response = await apiClient.post<ResponseEnvelope<SeasonSupplyPlanResponse>>("/season-supply-plans", data);
-  return response.data.data;
+/** Kết quả khai báo/cập nhật vật tư dự kiến: `warnings` chứa cảnh báo thiếu tồn/dưới ngưỡng (BR-SEA-09). */
+export interface SeasonSupplyPlanResult {
+  plan: SeasonSupplyPlanResponse;
+  warnings: ResponseWarning[];
 }
 
-// Cập nhật lượng vật tư dự kiến của mùa vụ (FR-SEA-04).
+// Khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04, BR-SEA-09).
+export async function createSeasonSupplyPlan(data: CreateSeasonSupplyPlanRequest): Promise<SeasonSupplyPlanResult> {
+  const response = await apiClient.post<ResponseEnvelope<SeasonSupplyPlanResponse>>("/season-supply-plans", data);
+  return { plan: response.data.data, warnings: response.data.warnings ?? [] };
+}
+
+// Cập nhật lượng vật tư dự kiến của mùa vụ (FR-SEA-04, BR-SEA-09).
 export async function updateSeasonSupplyPlan(
   id: string,
   data: UpdateSeasonSupplyPlanRequest,
-): Promise<SeasonSupplyPlanResponse> {
+): Promise<SeasonSupplyPlanResult> {
   const response = await apiClient.put<ResponseEnvelope<SeasonSupplyPlanResponse>>(`/season-supply-plans/${id}`, data);
-  return response.data.data;
+  return { plan: response.data.data, warnings: response.data.warnings ?? [] };
 }
 
 // Xóa một dòng vật tư dự kiến (FR-SEA-04).

@@ -81,7 +81,7 @@ public sealed class SeasonAssignmentService(
         if (user.IsLocked)
         {
             throw new AppException(
-                ErrorCodes.AccountLocked,
+                ErrorCodes.ValidationError,
                 "Không thể phân công tài khoản đang bị khóa.");
         }
 
@@ -90,14 +90,9 @@ public sealed class SeasonAssignmentService(
 
         if (existing is not null)
         {
-            return new SeasonAssignmentResponse(
-                existing.Id,
-                existing.SeasonId,
-                user.Id,
-                user.FullName,
-                user.Role,
-                user.PhoneNumber ?? string.Empty,
-                existing.CreatedAt);
+            throw new AppException(
+                ErrorCodes.ValidationError,
+                "Người này đã được phân công vào mùa vụ.");
         }
 
         var assignment = new SeasonAssignment
