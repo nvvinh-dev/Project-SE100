@@ -1,5 +1,6 @@
 using System.Net;
 using HouseholdFarm.Api.Common.Errors;
+using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Tests.Infrastructure;
@@ -251,7 +252,7 @@ public class SeasonListTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains(cancelled.Id, items);
     }
 
-    [Fact(DisplayName = "BR-USR-13, FR-SUP-08: Thành viên có quyền Kho thấy mùa vụ đã chốt ngoài phân công khi không truyền operation")]
+    [Fact(DisplayName = "BR-USR-13, FR-SUP-08: Thành viên chỉ có quyền Kho thấy mùa vụ đã chốt ngoài phân công khi không truyền operation")]
     public async Task GetOptions_WithoutOperation_StockPermission_WidenedScope()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -261,8 +262,28 @@ public class SeasonListTests(ApiFactory factory) : IClassFixture<ApiFactory>
         // Tạo mùa vụ đã chốt nhưng thành viên không được phân công
         var closedSeason = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Closed, ct);
 
-        // Thành viên có quyền Kho nhưng không được phân công
-        var stockMemberClient = factory.CreateClientFor(household.MemberWithAllPermissions);
+        // Thành viên CHỈ có quyền Kho (CanManageFinance = false, CanCloseSeason = false) và không được phân công
+        var phone = TestData.NewPhone();
+        var stockOnlyMember = new ApplicationUser
+        {
+            HouseholdId = household.Household.Id,
+            FullName = "Thành viên chỉ quyền Kho",
+            Role = UserRole.Member,
+            UserName = phone,
+            NormalizedUserName = phone,
+            PhoneNumber = phone,
+            PasswordHash = household.Member.PasswordHash,
+            SecurityStamp = Guid.CreateVersion7().ToString("N"),
+            LockoutEnabled = true,
+            CanManageStock = true,
+        };
+        await using (var db = factory.Postgres.CreateDbContext())
+        {
+            db.Users.Add(stockOnlyMember);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var stockMemberClient = factory.CreateClientFor(stockOnlyMember);
         var resWithStock = await stockMemberClient.GetAsync(OptionsPath, ct);
         Assert.Equal(HttpStatusCode.OK, resWithStock.StatusCode);
         var itemsWithStock = (await resWithStock.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
@@ -274,6 +295,19 @@ public class SeasonListTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, resNoStock.StatusCode);
         var itemsNoStock = (await resNoStock.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
         Assert.DoesNotContain(closedSeason.Id, itemsNoStock);
+    }
+
+    [Fact(DisplayName = "BR-USR-13: Gọi options với quyền mở rộng không phải Kho hoặc Tài chính trả VALIDATION_ERROR")]
+    public async Task GetOptions_InvalidPermission_ReturnsValidationError()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var client = factory.CreateClientFor(household.Owner);
+
+        var response = await client.GetAsync($"{OptionsPath}?permission=CloseSeason", ct);
+        var problem = await response.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+        var error = problem.GetProperty("errors").GetProperty("permission")[0].GetString();
+        Assert.Equal("Chỉ nhận quyền Kho hoặc Tài chính.", error);
     }
 }
 

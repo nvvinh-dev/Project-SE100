@@ -1,4 +1,5 @@
 using FluentValidation;
+using HouseholdFarm.Api.Domain.Enums;
 
 namespace HouseholdFarm.Api.Features.Seasons;
 
@@ -104,8 +105,10 @@ public sealed class SeasonOptionQueryValidator : AbstractValidator<SeasonOptionQ
             .WithMessage("Loại thao tác không hợp lệ.");
 
         RuleFor(q => q.Permission)
-            .IsInEnum().When(q => q.Permission.HasValue)
-            .WithMessage("Quyền mở rộng không hợp lệ.");
+            .Cascade(CascadeMode.Stop)
+            .IsInEnum().When(q => q.Permission.HasValue).WithMessage("Quyền mở rộng không hợp lệ.")
+            .Must(p => p is null or ExtraPermission.ManageStock or ExtraPermission.ManageFinance)
+            .WithMessage("Chỉ nhận quyền Kho hoặc Tài chính.");
     }
 }
 
