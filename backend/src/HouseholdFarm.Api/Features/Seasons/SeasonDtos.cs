@@ -152,9 +152,11 @@ public sealed record SeasonQuery : PageQuery
 }
 
 /// <summary>
-/// Tham số truy vấn ô chọn mùa vụ theo loại thao tác (FR-SEA-11).
+/// Tham số truy vấn ô chọn mùa vụ theo loại thao tác (FR-SEA-11, BR-SEA-10) hoặc quyền xem (BR-USR-13).
 /// </summary>
-public sealed record SeasonOptionQuery(SeasonOperation? Operation);
+public sealed record SeasonOptionQuery(
+    SeasonOperation? Operation = null,
+    ExtraPermission? Permission = null);
 
 /// <summary>
 /// Mục lựa chọn mùa vụ cho component SeasonSelect dùng chung (FR-SEA-11).

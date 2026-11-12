@@ -74,12 +74,34 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
         // Ma trận phân quyền: Nhân công không được xem danh sách mùa vụ
         currentUser.EnsureNotWorker();
 
-        if (query.Operation is null)
-        {
-            throw new AppException(ErrorCodes.ValidationError, "Vui lòng chọn loại thao tác.");
-        }
+        IReadOnlyCollection<SeasonStatus> allowedStatuses;
+        ExtraPermission? outOfScopePermission = null;
 
-        var (allowedStatuses, outOfScopePermission) = SeasonStateRules.GetRule(query.Operation.Value);
+        if (query.Operation.HasValue)
+        {
+            // Khi thực hiện thao tác ghi: áp dụng quy tắc trạng thái bảng 4.3 và quyền mở rộng (BR-SEA-10, BR-USR-13)
+            (allowedStatuses, outOfScopePermission) = SeasonStateRules.GetRule(query.Operation.Value);
+        }
+        else
+        {
+            // Khi dùng làm ô lọc xem dữ liệu (Read-only / Filter):
+            // 1. Cho phép tất cả trạng thái mùa vụ (gồm cả Closed, Cancelled)
+            allowedStatuses = [SeasonStatus.Planned, SeasonStatus.InProgress, SeasonStatus.Closed, SeasonStatus.Cancelled];
+
+            // 2. BR-USR-13: Mở rộng phạm vi toàn hộ theo quyền chỉ định hoặc quyền sẵn có của user
+            if (query.Permission.HasValue)
+            {
+                outOfScopePermission = query.Permission.Value;
+            }
+            else if (currentUser.HasPermission(ExtraPermission.ManageStock))
+            {
+                outOfScopePermission = ExtraPermission.ManageStock;
+            }
+            else if (currentUser.HasPermission(ExtraPermission.ManageFinance))
+            {
+                outOfScopePermission = ExtraPermission.ManageFinance;
+            }
+        }
 
         // BR-USR-13: Thành viên có quyền Kho hoặc TC thấy thêm mùa vụ ngoài phân công khi thực hiện thao tác tương ứng
         var seasons = db.Seasons.AsNoTracking();
@@ -87,7 +109,7 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
             ? seasons.VisibleTo(currentUser, outOfScopePermission.Value)
             : seasons.VisibleTo(currentUser);
 
-        // Lọc theo các trạng thái được phép thao tác theo BR-SEA-10
+        // Lọc theo các trạng thái được phép theo quy tắc
         var items = await seasons
             .Where(s => allowedStatuses.Contains(s.Status))
             .OrderByDescending(s => s.StartDate)

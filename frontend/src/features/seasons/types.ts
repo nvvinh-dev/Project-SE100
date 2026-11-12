@@ -1,5 +1,5 @@
 import type { PageQuery } from "@/lib/api-client";
-import type { SeasonStatus, Unit } from "@/lib/enums";
+import type { ExtraPermission, SeasonStatus, Unit } from "@/lib/enums";
 
 // Loại thao tác mùa vụ theo quy tắc trạng thái (BR-SEA-10).
 export const seasonOperations = [
@@ -59,9 +59,10 @@ export interface SeasonQuery extends PageQuery {
   to?: string;
 }
 
-// Tham số truy vấn ô chọn mùa vụ theo loại thao tác (FR-SEA-11).
+// Tham số truy vấn ô chọn mùa vụ theo loại thao tác (FR-SEA-11, BR-SEA-10) hoặc quyền xem (BR-USR-13).
 export interface SeasonOptionQuery {
-  operation: SeasonOperation;
+  operation?: SeasonOperation;
+  permission?: ExtraPermission;
 }
 
 // Mục lựa chọn mùa vụ cho component SeasonSelect dùng chung (FR-SEA-11).
