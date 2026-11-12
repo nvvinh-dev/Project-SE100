@@ -5,6 +5,7 @@ import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { showSuccess } from "@/components/common/toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SeasonForm, type SeasonFormSubmit } from "@/features/seasons/components/SeasonForm";
 import { useSeason, useUpdateSeason } from "@/features/seasons/queries";
 import {
@@ -35,6 +36,24 @@ export function SeasonEditPage() {
       <NotFoundPage />
     ) : (
       <ErrorAlert error={season.error} onRetry={() => void season.refetch()} />
+    );
+  }
+
+  const isTerminated = season.data.status === "Closed" || season.data.status === "Cancelled";
+  if (isTerminated) {
+    const statusLabel = season.data.status === "Closed" ? "đã chốt" : "đã hủy";
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title={`Sửa mùa vụ ${season.data.cropName} · ${season.data.plotCode}`}
+          backTo={backTo}
+        />
+        <Alert>
+          <AlertDescription>
+            Mùa vụ {statusLabel} không thể sửa thông tin.
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 

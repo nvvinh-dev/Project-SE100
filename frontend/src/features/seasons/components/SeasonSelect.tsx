@@ -6,18 +6,26 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { useSeason, useSeasonOptions } from "@/features/seasons/queries";
 import type { SeasonOperation, SeasonOptionItem } from "@/features/seasons/types";
 import { seasonStatusLabels } from "@/lib/enum-labels";
+import type { ExtraPermission } from "@/lib/enums";
 import { formatDate } from "@/lib/format";
 
 export interface SeasonSelectProps {
   id: string;
   value: string;
   onChange: (seasonId: string, option?: SeasonOptionItem) => void;
-  /** Loại thao tác để lọc mùa vụ theo trạng thái (BR-SEA-10) và phạm vi (BR-USR-13). */
-  operation: SeasonOperation;
+  /**
+   * Loại thao tác để lọc mùa vụ theo trạng thái (BR-SEA-10) và phạm vi (BR-USR-13).
+   * Để trống khi dùng làm ô lọc (lấy mọi trạng thái, mở rộng theo quyền Kho/TC).
+   */
+  operation?: SeasonOperation;
+  /** Quyền bổ sung dùng để mở rộng phạm vi (BR-USR-13) khi không truyền operation. */
+  permission?: ExtraPermission;
   invalid?: boolean;
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
+  /** Dùng làm bộ lọc: dòng trống chọn được, mang nhãn này (ví dụ "Tất cả mùa vụ"). Form nhập liệu để trống. */
+  emptyLabel?: string;
   /**
    * Bật nạp chi tiết khi giá trị chọn không nằm trong danh sách lựa chọn hợp lệ.
    * Chỉ nên bật khi sửa bản ghi cũ (mùa vụ đã đóng/hủy sau khi ghi), KHÔNG bật cho form tạo mới
@@ -29,30 +37,41 @@ export interface SeasonSelectProps {
 /**
  * Ô chọn mùa vụ dùng chung, có ô tìm kiếm phía trên danh sách (FR-SEA-11).
  *
- * Cách dùng cho các trang form (`/tasks/new`, `/stock/out`, `/sales/new`, `/expenses/new`):
- * - Truyền `operation` tương ứng (`ManageFarmTasks`, `StockOut`, `ManageSales`, `ManageExpenses`...)
- *   để backend lọc đúng mùa vụ theo trạng thái (BR-SEA-10) và quyền ngoài phân công (BR-USR-13).
- * - Tự động nhận `?seasonId=` trên đường dẫn khi `value` chưa có và mùa vụ đó hợp lệ.
- * - Khi làm form sửa bản ghi lịch sử cũ (mùa vụ có thể đã đóng), truyền `allowInactiveFallback={true}`
- *   để nạp và hiển thị nhãn dự phòng.
+ * Cách dùng:
+ * 1. Các trang form nhập liệu (`/tasks/new`, `/stock/out`, `/sales/new`, `/expenses/new`):
+ *    - Truyền `operation` tương ứng (`ManageFarmTasks`, `StockOut`, `ManageSales`, `ManageExpenses`...)
+ *      để backend lọc đúng mùa vụ theo trạng thái (BR-SEA-10) và quyền ngoài phân công (BR-USR-13).
+ *    - Tự động nhận `?seasonId=` trên đường dẫn khi `value` chưa có và mùa vụ đó hợp lệ.
+ *    - Khi làm form sửa bản ghi lịch sử cũ (mùa vụ có thể đã đóng), truyền `allowInactiveFallback={true}`
+ *      để nạp và hiển thị nhãn dự phòng.
+ *
+ * 2. Các trang danh sách / lịch sử dùng làm bộ lọc (`/stock-transactions`, `/tasks`...):
+ *    - Truyền `emptyLabel="Tất cả mùa vụ"`: dòng trống có thể chọn được, `required = false`.
+ *    - Không cần truyền `operation` (hoặc truyền `permission="ManageStock"`) để hiển thị tất cả mùa vụ
+ *      (kể cả đã chốt) và mở rộng phạm vi theo quyền Kho/TC (BR-USR-13).
  */
 export function SeasonSelect({
   id,
   value,
   onChange,
   operation,
+  permission,
   invalid = false,
   disabled = false,
-  required = true,
+  required,
   placeholder = "Chọn mùa vụ",
+  emptyLabel,
   allowInactiveFallback = false,
 }: SeasonSelectProps) {
   const [search, setSearch] = useState("");
   const [searchParams] = useSearchParams();
   const querySeasonId = searchParams.get("seasonId");
 
-  const seasonOptions = useSeasonOptions({ operation });
+  const seasonOptions = useSeasonOptions({ operation, permission });
   const allOptions = useMemo(() => seasonOptions.data ?? [], [seasonOptions.data]);
+
+  const isFilterMode = emptyLabel !== undefined;
+  const isRequired = required ?? !isFilterMode;
 
   // Tự động nhận giá trị mặc định từ ?seasonId= khi form chưa có giá trị
   // và mùa vụ đó thuộc danh sách lựa chọn hợp lệ của thao tác hiện tại
@@ -109,23 +128,23 @@ export function SeasonSelect({
           const selectedOption = allOptions.find((opt) => opt.id === selectedId);
           onChange(selectedId, selectedOption);
         }}
-        required={required}
+        required={isRequired}
         disabled={disabled || seasonOptions.isPending}
         aria-invalid={invalid}
       >
-        <NativeSelectOption value="" disabled>
+        <NativeSelectOption value="" disabled={emptyLabel === undefined}>
           {seasonOptions.isPending
             ? "Đang tải danh sách mùa vụ..."
             : seasonOptions.isError
               ? "Lỗi tải danh sách mùa vụ"
-              : placeholder}
+              : (emptyLabel ?? placeholder)}
         </NativeSelectOption>
         {!isSelectedInFiltered && value && fallbackLabel && (
           <NativeSelectOption value={value}>{fallbackLabel}</NativeSelectOption>
         )}
         {filteredOptions.map((opt) => (
           <NativeSelectOption key={opt.id} value={opt.id}>
-            {opt.label}
+            {opt.status === "InProgress" ? opt.label : `${opt.label} (${seasonStatusLabels[opt.status]})`}
           </NativeSelectOption>
         ))}
       </NativeSelect>

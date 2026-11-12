@@ -36,9 +36,14 @@ export function seasonFormSchema() {
           error: "Mục tiêu sản lượng tối đa 3 chữ số sau dấu phẩy và 15 chữ số phần nguyên.",
         }),
     })
-    .refine((data) => !data.startDate || !data.expectedHarvestDate || data.expectedHarvestDate >= data.startDate, {
-      error: "Ngày dự kiến thu hoạch phải lớn hơn hoặc bằng ngày bắt đầu.",
-      path: ["expectedHarvestDate"],
+    .superRefine((data, ctx) => {
+      if (data.startDate && data.expectedHarvestDate && data.expectedHarvestDate < data.startDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Ngày dự kiến thu hoạch phải lớn hơn hoặc bằng ngày bắt đầu.",
+          path: ["expectedHarvestDate"],
+        });
+      }
     });
 }
 

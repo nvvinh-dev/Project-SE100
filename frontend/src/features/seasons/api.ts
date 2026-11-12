@@ -90,8 +90,8 @@ export async function unassignSeason(
   id: string,
   request?: UnassignSeasonAssignmentRequest,
 ): Promise<{ success: boolean }> {
-  const response = await apiClient.post<{ success: boolean }>(`/season-assignments/${id}/unassign`, request ?? {});
-  return response.data;
+  const response = await apiClient.post<ResponseEnvelope<{ success: boolean }>>(`/season-assignments/${id}/unassign`, request ?? {});
+  return response.data.data;
 }
 
 // Lấy danh sách ghi chú kinh nghiệm của mùa vụ (FR-SEA-13).
@@ -119,23 +119,14 @@ export async function updateSeasonNote(
 
 // Lấy danh sách thành viên hộ để phân công vào mùa vụ (FR-SEA-06).
 export async function getHouseholdMembers(): Promise<HouseholdMemberOption[]> {
-  try {
-    const response = await apiClient.get<ResponseEnvelope<HouseholdMemberOption[]>>("/members");
-    return response.data.data;
-  } catch {
-    return [];
-  }
+  const response = await apiClient.get<ResponseEnvelope<HouseholdMemberOption[]>>("/members");
+  return response.data.data;
 }
 
 // Lấy danh sách cây trồng đang hoạt động để chọn khi tạo mùa vụ (FR-SEA-01, FR-SEA-02).
 export async function getActiveCrops(): Promise<CropOptionItem[]> {
-  try {
-    const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
-      params: { status: "Active", pageSize: 100 },
-    });
-    return response.data.data;
-  } catch {
-    // Khi module cây trồng chưa triển khai endpoint /crops, trả mảng rỗng để giao diện không bị sập
-    return [];
-  }
+  const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
+    params: { status: "Active", pageSize: 100 },
+  });
+  return response.data.data;
 }

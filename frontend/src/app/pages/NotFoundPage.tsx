@@ -12,7 +12,7 @@ export function NotFoundPage() {
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
       <FileQuestionIcon className="size-10 text-muted-foreground" aria-hidden />
-      <p className="max-w-sm font-medium">Không tìm thấy dữ liệu này, có thể đã bị xóa hoặc bạn không có quyền xem.</p>
+      <p className="max-w-sm font-medium">Không tìm thấy dữ liệu này.</p>
       <Button
         variant="outline"
         className="mt-2 h-11"

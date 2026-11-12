@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { usePlot, usePlots } from "@/features/plots/queries";
+import { getPlot } from "@/features/plots/api";
+import { plotKeys, usePlots } from "@/features/plots/queries";
 
 interface PlotSelectProps {
   id: string;
@@ -18,14 +20,24 @@ const PAGE_SIZE = 100;
 export function PlotSelect({ id, value, onChange, disabled = false, invalid = false }: PlotSelectProps) {
   const [search, setSearch] = useState("");
   const plots = usePlots({ search: search.trim() || undefined, status: "Active", page: 1, pageSize: PAGE_SIZE });
-  const selected = usePlot(value);
+  const selected = useQuery({
+    queryKey: plotKeys.detail(value),
+    queryFn: () => getPlot(value),
+    enabled: Boolean(value),
+  });
   const items = plots.data?.items ?? [];
-  const showSelected = selected.data !== undefined && !items.some((plot) => plot.id === value);
+  const showSelected =
+    Boolean(value) &&
+    selected.data !== undefined &&
+    selected.data.id === value &&
+    !items.some((plot) => plot.id === value);
   const isEmpty = !plots.isPending && items.length === 0 && !search.trim();
+  const totalCount = plots.data?.meta.totalCount ?? items.length;
+  const showSearch = !disabled && (totalCount > 5 || Boolean(search.trim()));
 
   return (
     <div className="flex flex-col gap-2">
-      {!disabled && items.length > 5 && (
+      {showSearch && (
         <Input
           type="search"
           value={search}

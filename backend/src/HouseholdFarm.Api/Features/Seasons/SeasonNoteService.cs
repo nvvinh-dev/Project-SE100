@@ -13,8 +13,11 @@ public sealed class SeasonNoteService(
 {
     public async Task<IReadOnlyList<SeasonNoteResponse>> GetListAsync(Guid seasonId, CancellationToken ct)
     {
-        // Ma trận phân quyền: Nhân công không xem ghi chú mùa vụ
-        currentUser.EnsureNotWorker();
+        // Ma trận phân quyền: Nhân công không xem ghi chú mùa vụ (BR-GEN-02)
+        if (currentUser.Role == UserRole.Worker)
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
 
         // Kiểm tra quyền truy cập mùa vụ
         var isOwner = currentUser.Role == UserRole.Owner;
@@ -54,7 +57,10 @@ public sealed class SeasonNoteService(
 
     public async Task<SeasonNoteResponse> CreateAsync(CreateSeasonNoteRequest request, CancellationToken ct)
     {
-        currentUser.EnsureNotWorker();
+        if (currentUser.Role == UserRole.Worker)
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
 
         var isOwner = currentUser.Role == UserRole.Owner;
         if (!isOwner && !currentUser.AssignedSeasonIds.Contains(request.SeasonId))
@@ -100,11 +106,21 @@ public sealed class SeasonNoteService(
 
     public async Task<SeasonNoteResponse> UpdateAsync(Guid id, UpdateSeasonNoteRequest request, CancellationToken ct)
     {
-        currentUser.EnsureNotWorker();
+        if (currentUser.Role == UserRole.Worker)
+        {
+            throw AppException.NotFound("ghi chú");
+        }
 
         var note = await db.SeasonNotes
             .FirstOrDefaultAsync(n => n.Id == id, ct)
             ?? throw AppException.NotFound("ghi chú");
+
+        // BR-SEA-11, BR-USR-13: Thành viên bị thu hồi phân công không thể sửa ghi chú của mùa vụ ngoài phạm vi
+        var isOwner = currentUser.Role == UserRole.Owner;
+        if (!isOwner && !currentUser.AssignedSeasonIds.Contains(note.SeasonId))
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
 
         // BR-SEA-11: Chỉ người viết ghi chú sửa được nội dung của mình, ở mọi trạng thái mùa vụ
         if (note.CreatedById != currentUser.UserId)

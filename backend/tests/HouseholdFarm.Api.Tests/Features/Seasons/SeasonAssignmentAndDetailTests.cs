@@ -251,4 +251,170 @@ public class SeasonAssignmentAndDetailTests(ApiFactory factory) : IClassFixture<
             ct);
         await updateResponse.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
     }
+
+    [Fact(DisplayName = "BR-USR-10: Phân công người bị khóa trả VALIDATION_ERROR")]
+    public async Task Assign_LockedUser_ReturnsValidationError()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
+
+        // Khóa tài khoản Member
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        var member = await db.Users.SingleAsync(u => u.Id == household.Member.Id, ct);
+        member.IsLocked = true;
+        await db.SaveChangesAsync(ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var request = new CreateSeasonAssignmentRequest(season.Id, household.Member.Id);
+        var response = await client.PostAsJsonAsync(AssignmentsPath, request, ct);
+        await response.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+    }
+
+    [Fact(DisplayName = "FR-SEA-06: Phân công người đã được phân công rồi trả VALIDATION_ERROR")]
+    public async Task Assign_AlreadyAssigned_ReturnsValidationError()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
+
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        db.SeasonAssignments.Add(new SeasonAssignment { SeasonId = season.Id, UserId = household.Member.Id });
+        await db.SaveChangesAsync(ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var request = new CreateSeasonAssignmentRequest(season.Id, household.Member.Id);
+        var response = await client.PostAsJsonAsync(AssignmentsPath, request, ct);
+        await response.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+    }
+
+    [Fact(DisplayName = "BR-USR-11: Phân công khi mùa vụ Closed trả SEASON_INVALID_STATE")]
+    public async Task Assign_WhenSeasonClosed_ReturnsSeasonInvalidState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Closed, ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var request = new CreateSeasonAssignmentRequest(season.Id, household.Member.Id);
+        var response = await client.PostAsJsonAsync(AssignmentsPath, request, ct);
+        await response.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
+    }
+
+    [Fact(DisplayName = "FR-SEA-06: Thu hồi phân công người không có việc chưa làm thành công ngay")]
+    public async Task Unassign_NoPendingTasks_SucceedsImmediately()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        var assignment = new SeasonAssignment { SeasonId = season.Id, UserId = household.Member.Id };
+        db.SeasonAssignments.Add(assignment);
+        await db.SaveChangesAsync(ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var response = await client.PostAsJsonAsync(
+            $"{AssignmentsPath}/{assignment.Id}/unassign",
+            new UnassignSeasonAssignmentRequest(Confirmed: false),
+            ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var dbCheck = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        Assert.False(await dbCheck.SeasonAssignments.AnyAsync(a => a.Id == assignment.Id, ct));
+    }
+
+    [Fact(DisplayName = "BR-GEN-02, BR-USR-14: Nhân công xem chi tiết mùa vụ trả NOT_FOUND")]
+    public async Task GetDetail_ByWorker_ReturnsNotFound()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        var client = factory.CreateClientFor(household.Worker);
+        var response = await client.GetAsync($"{SeasonsPath}/{season.Id}", ct);
+        await response.AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
+    }
+
+    [Fact(DisplayName = "BR-USR-13: Thành viên không có quyền TC không nhận trường financialSummary trong JSON")]
+    public async Task GetDetail_MemberWithoutFinance_OmitsFinancialSummary()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        // Phân công Member vào mùa vụ
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        db.SeasonAssignments.Add(new SeasonAssignment { SeasonId = season.Id, UserId = household.Member.Id });
+        await db.SaveChangesAsync(ct);
+
+        var client = factory.CreateClientFor(household.Member);
+        var response = await client.GetAsync($"{SeasonsPath}/{season.Id}", ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.ReadJsonAsync(ct);
+        var data = json.GetProperty("data");
+        Assert.False(data.TryGetProperty("financialSummary", out _));
+    }
+
+    [Fact(DisplayName = "BR-GEN-02, BR-USR-14: Nhân công xem ghi chú kinh nghiệm trả NOT_FOUND")]
+    public async Task Notes_ByWorker_ReturnsNotFound()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        var client = factory.CreateClientFor(household.Worker);
+        var response = await client.GetAsync($"{NotesPath}?seasonId={season.Id}", ct);
+        await response.AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
+    }
+
+    [Fact(DisplayName = "BR-SEA-11: Thêm ghi chú kinh nghiệm khi mùa vụ Closed thành công")]
+    public async Task Notes_WhenSeasonClosed_Success()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Closed, ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+        var request = new CreateSeasonNoteRequest(season.Id, "Đúc kết kinh nghiệm sau khi chốt mùa");
+        var response = await client.PostAsJsonAsync(NotesPath, request, ct);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact(DisplayName = "BR-SEA-11, BR-USR-13: Thành viên bị thu hồi phân công không sửa được ghi chú cũ")]
+    public async Task Notes_Update_WhenUnassigned_ReturnsNotFound()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        // Tạo ghi chú của Member
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        var note = new SeasonNote
+        {
+            SeasonId = season.Id,
+            Content = "Ghi chú ban đầu của member",
+            CreatedById = household.Member.Id,
+        };
+        db.SeasonNotes.Add(note);
+        await db.SaveChangesAsync(ct);
+
+        // Member không còn được phân công vào season này
+        var clientMember = factory.CreateClientFor(household.Member);
+        var response = await clientMember.PutAsJsonAsync(
+            $"{NotesPath}/{note.Id}",
+            new UpdateSeasonNoteRequest("Member cố sửa khi đã bị unassign", note.Version),
+            ct);
+        await response.AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
+    }
 }
