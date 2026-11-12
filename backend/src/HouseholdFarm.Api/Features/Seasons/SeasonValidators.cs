@@ -100,9 +100,12 @@ public sealed class SeasonOptionQueryValidator : AbstractValidator<SeasonOptionQ
     public SeasonOptionQueryValidator()
     {
         RuleFor(q => q.Operation)
-            .Cascade(CascadeMode.Stop)
-            .NotNull().WithMessage("Vui lòng chọn loại thao tác.")
-            .IsInEnum().WithMessage("Loại thao tác không hợp lệ.");
+            .IsInEnum().When(q => q.Operation.HasValue)
+            .WithMessage("Loại thao tác không hợp lệ.");
+
+        RuleFor(q => q.Permission)
+            .IsInEnum().When(q => q.Permission.HasValue)
+            .WithMessage("Quyền mở rộng không hợp lệ.");
     }
 }
 

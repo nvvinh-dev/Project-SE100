@@ -225,5 +225,55 @@ public class SeasonListTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var response = await workerClient.GetAsync($"{OptionsPath}?operation=StockOut", ct);
         await response.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
     }
+
+    [Fact(DisplayName = "FR-SEA-11: ô chọn mùa vụ khi không truyền operation trả về mọi trạng thái để phục vụ bộ lọc")]
+    public async Task GetOptions_WithoutOperation_ReturnsAllStatusesForFilter()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+
+        var planned = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
+        var inProgress = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+        var closed = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Closed, ct);
+        var cancelled = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Cancelled, ct);
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        // Gọi không truyền operation: phải trả về cả 4 trạng thái
+        var response = await client.GetAsync(OptionsPath, ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var items = (await response.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
+        Assert.Contains(planned.Id, items);
+        Assert.Contains(inProgress.Id, items);
+        Assert.Contains(closed.Id, items);
+        Assert.Contains(cancelled.Id, items);
+    }
+
+    [Fact(DisplayName = "BR-USR-13, FR-SUP-08: Thành viên có quyền Kho thấy mùa vụ đã chốt ngoài phân công khi không truyền operation")]
+    public async Task GetOptions_WithoutOperation_StockPermission_WidenedScope()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+
+        // Tạo mùa vụ đã chốt nhưng thành viên không được phân công
+        var closedSeason = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Closed, ct);
+
+        // Thành viên có quyền Kho nhưng không được phân công
+        var stockMemberClient = factory.CreateClientFor(household.MemberWithAllPermissions);
+        var resWithStock = await stockMemberClient.GetAsync(OptionsPath, ct);
+        Assert.Equal(HttpStatusCode.OK, resWithStock.StatusCode);
+        var itemsWithStock = (await resWithStock.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
+        Assert.Contains(closedSeason.Id, itemsWithStock);
+
+        // Thành viên không có quyền Kho và không được phân công
+        var normalMemberClient = factory.CreateClientFor(household.Member);
+        var resNoStock = await normalMemberClient.GetAsync(OptionsPath, ct);
+        Assert.Equal(HttpStatusCode.OK, resNoStock.StatusCode);
+        var itemsNoStock = (await resNoStock.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
+        Assert.DoesNotContain(closedSeason.Id, itemsNoStock);
+    }
 }
 
