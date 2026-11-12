@@ -8,6 +8,6 @@ import { ACCESS } from "@/lib/auth/access";
 // Danh sách route của module mùa vụ (FR-SEA-01, FR-SEA-07, FR-SEA-11).
 export const seasonRoutes: RouteObject[] = [
   { path: "/seasons", element: <SeasonListPage />, handle: { access: ACCESS.household } satisfies RouteHandle },
-  { path: "/seasons/new", element: <SeasonCreatePage />, handle: { access: ACCESS.owner } satisfies RouteHandle },
-  { path: "/seasons/:id/edit", element: <SeasonEditPage />, handle: { access: ACCESS.owner } satisfies RouteHandle },
+  { path: "/seasons/new", element: <SeasonCreatePage />, handle: { access: ACCESS.owner, form: true } satisfies RouteHandle },
+  { path: "/seasons/:id/edit", element: <SeasonEditPage />, handle: { access: ACCESS.owner, form: true } satisfies RouteHandle },
 ];

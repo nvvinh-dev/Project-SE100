@@ -53,13 +53,8 @@ export async function updateSeason(id: string, request: UpdateSeasonRequest): Pr
 
 // Lấy danh sách cây trồng đang hoạt động để chọn khi tạo mùa vụ (FR-SEA-01, FR-SEA-02).
 export async function getActiveCrops(): Promise<CropOptionItem[]> {
-  try {
-    const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
-      params: { status: "Active", pageSize: 100 },
-    });
-    return response.data.data;
-  } catch {
-    // Khi module cây trồng chưa triển khai endpoint /crops, trả mảng rỗng để giao diện không bị sập
-    return [];
-  }
+  const response = await apiClient.get<ResponseEnvelope<CropOptionItem[]>>("/crops", {
+    params: { status: "Active", pageSize: 100 },
+  });
+  return response.data.data;
 }
