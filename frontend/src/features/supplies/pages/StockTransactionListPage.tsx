@@ -7,6 +7,7 @@ import { Pagination } from "@/components/common/Pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { SeasonSelect } from "@/features/seasons/components/SeasonSelect";
 import { StockTransactionList } from "@/features/supplies/components/StockTransactionList";
 import { SupplySelect } from "@/features/supplies/components/SupplySelect";
 import { useStockTransactions } from "@/features/supplies/queries";
@@ -18,7 +19,7 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * `/stock-transactions`: lịch sử giao dịch kho (Chủ hộ, TV+Kho), mới nhất trước, gồm cả giao dịch đã hủy để thấy nhãn "Đã hủy".
- * API không tìm theo chữ nên các ô lọc đặt thẳng trên trang. `?seasonId=` lọc theo mùa vụ khi mở từ trang mùa vụ.
+ * API không tìm theo chữ nên các ô lọc đặt thẳng trên trang. Mở từ trang mùa vụ kèm `?seasonId=` thì đã lọc sẵn mùa vụ đó.
  */
 export function StockTransactionListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,7 +50,7 @@ export function StockTransactionListPage() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Lịch sử kho" />
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="filter-supply" className="text-sm font-medium">
             Vật tư
@@ -59,6 +60,19 @@ export function StockTransactionListPage() {
             value={query.supplyId ?? ""}
             onChange={(supplyId) => updateParams({ supplyId: supplyId || undefined })}
             emptyLabel="Tất cả vật tư"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="filter-season" className="text-sm font-medium">
+            Mùa vụ
+          </label>
+          {/* Không truyền thao tác: lấy mùa vụ mọi trạng thái, kể cả đã chốt; quyền Kho thấy cả mùa vụ ngoài phân công (BR-USR-13). */}
+          <SeasonSelect
+            id="filter-season"
+            value={query.seasonId ?? ""}
+            onChange={(seasonId) => updateParams({ seasonId: seasonId || undefined })}
+            permission="ManageStock"
+            emptyLabel="Tất cả mùa vụ"
           />
         </div>
         <div className="flex flex-col gap-1.5">
