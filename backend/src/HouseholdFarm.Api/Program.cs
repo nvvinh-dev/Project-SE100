@@ -11,6 +11,7 @@ using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Features.Auth;
+using HouseholdFarm.Api.Features.Expenses;
 using HouseholdFarm.Api.Features.Plots;
 using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Reports.Finance;
@@ -90,6 +91,7 @@ builder.Services.AddScoped<ISupplyService, SupplyService>();
 builder.Services.AddScoped<StockLedger>();
 builder.Services.AddScoped<StockOperations>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
+builder.Services.AddScoped<IExpenseService, ExpenseService>();
 
 var app = builder.Build();
 

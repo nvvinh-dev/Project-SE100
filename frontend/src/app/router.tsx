@@ -6,6 +6,7 @@ import { NotFoundPage } from "@/app/pages/NotFoundPage";
 import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
 import { accountRoutes, authRoutes } from "@/features/auth/routes";
+import { expenseRoutes } from "@/features/expenses/routes";
 import { plotRoutes } from "@/features/plots/routes";
 import { seasonRoutes } from "@/features/seasons/routes";
 import { supplyRoutes } from "@/features/supplies/routes";
@@ -34,6 +35,7 @@ const routes: RouteObject[] = [
           ...plotRoutes,
           ...seasonRoutes,
           ...supplyRoutes,
+          ...expenseRoutes,
           { path: "*", element: <NotFoundPage /> },
         ],
       },
