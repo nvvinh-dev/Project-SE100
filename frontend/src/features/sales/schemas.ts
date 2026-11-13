@@ -1,6 +1,14 @@
 import type { UseFormSetError } from "react-hook-form";
 import { z } from "zod";
-import type { CreateCustomerRequest, CreateSaleRequest, CustomerResponse, UpdateCustomerRequest } from "@/features/sales/types";
+import type {
+  CorrectSaleRequest,
+  CreateCustomerRequest,
+  CreatePaymentRequest,
+  CreateSaleRequest,
+  CustomerResponse,
+  SaleResponse,
+  UpdateCustomerRequest,
+} from "@/features/sales/types";
 import { todayInVietnam } from "@/features/supplies/schemas";
 import { qualityGrades, recordStatuses, salesChannels } from "@/lib/enums";
 import { setFieldErrors } from "@/lib/form-errors";
@@ -170,4 +178,79 @@ export function previewRevenue(quantityText: string, unitPriceText: string): num
     return null;
   }
   return Math.round(quantity * unitPrice * 100) / 100;
+}
+
+/** Điền form điều chỉnh từ giao dịch đang có; số dùng dấu phẩy thập phân như người dùng quen gõ. */
+export function saleToFormValues(sale: SaleResponse): SaleFormValues {
+  return {
+    seasonId: sale.seasonId,
+    qualityGrade: sale.qualityGrade,
+    customerId: sale.customerId ?? "",
+    channel: sale.channel ?? "",
+    channelOther: sale.channelOther ?? "",
+    quantity: String(sale.quantity).replace(".", ","),
+    unitPrice: String(sale.unitPrice).replace(".", ","),
+    saleDate: sale.saleDate,
+    note: sale.note ?? "",
+    harvestRecordIds: sale.harvestLinks.map((link) => link.harvestRecordId),
+  };
+}
+
+export function toCorrectSaleRequest(values: SaleFormOutput, reason: string, version: number): CorrectSaleRequest {
+  // BR-SAL-03: không đổi mùa vụ, nên yêu cầu điều chỉnh không có mùa vụ, requestId.
+  const data = toCreateSaleRequest(values, "");
+  return {
+    customerId: data.customerId,
+    channel: data.channel,
+    channelOther: data.channelOther,
+    qualityGrade: data.qualityGrade,
+    quantity: data.quantity,
+    unitPrice: data.unitPrice,
+    saleDate: data.saleDate,
+    note: data.note,
+    harvestRecordIds: data.harvestRecordIds,
+    reason,
+    version,
+  };
+}
+
+// ---- Thanh toán ----
+
+const PAYMENT_AMOUNT_PATTERN = /^\d{1,16}(?:[.,]\d{1,2})?$/;
+
+/** Hộp thoại ghi thanh toán; `outstanding` là công nợ còn lại để báo sớm khi vượt (BR-SAL-06). */
+export function paymentFormSchema(outstanding: number) {
+  return z.object({
+    amount: z
+      .string()
+      .trim()
+      .min(1, { error: "Vui lòng nhập số tiền." })
+      .refine((text) => parseDecimalInput(text) !== null, { error: "Số tiền phải là số, ví dụ 500000." })
+      .refine((text) => (parseDecimalInput(text) ?? 0) > 0, { error: "Số tiền phải lớn hơn 0." })
+      .refine((text) => PAYMENT_AMOUNT_PATTERN.test(text), { error: "Số tiền tối đa 2 chữ số sau dấu phẩy." })
+      .refine((text) => (parseDecimalInput(text) ?? 0) <= outstanding, {
+        error: "Số tiền vượt công nợ còn lại.",
+      }),
+    // BR-SAL-06: được trước ngày bán (tiền cọc), không được sau hôm nay.
+    paymentDate: z
+      .string()
+      .min(1, { error: "Vui lòng chọn ngày nhận tiền." })
+      .refine((date) => date <= todayInVietnam(), { error: "Ngày nhận tiền không được sau hôm nay." }),
+    note: z.string().trim(),
+  });
+}
+
+export type PaymentFormValues = z.input<ReturnType<typeof paymentFormSchema>>;
+export type PaymentFormOutput = z.output<ReturnType<typeof paymentFormSchema>>;
+
+export const paymentFormFields = ["amount", "paymentDate", "note"] as const satisfies readonly (keyof PaymentFormValues)[];
+
+export function toCreatePaymentRequest(values: PaymentFormOutput, saleId: string, requestId: string): CreatePaymentRequest {
+  return {
+    requestId,
+    saleId,
+    amount: parseDecimalInput(values.amount) ?? 0,
+    paymentDate: values.paymentDate,
+    note: emptyToNull(values.note),
+  };
 }

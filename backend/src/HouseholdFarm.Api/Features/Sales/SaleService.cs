@@ -3,6 +3,7 @@ using HouseholdFarm.Api.Common.Auth;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Common.Persistence;
 using HouseholdFarm.Api.Common.Responses;
+using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
@@ -15,6 +16,7 @@ namespace HouseholdFarm.Api.Features.Sales;
 public sealed class SaleService(
     AppDbContext db,
     ICurrentUser currentUser,
+    IAppClock clock,
     IAuditLogger audit,
     ISeasonStateGuard seasonStateGuard,
     IProduceStockService produceStock) : ISaleService
@@ -66,11 +68,194 @@ public sealed class SaleService(
             _ => rows,
         };
 
-        return await rows
-            .OrderByDescending(r => r.Sale.SaleDate)
-            .ThenByDescending(r => r.Sale.CreatedAt)
-            .ThenBy(r => r.Sale.Id)
-            .Select(r => new SaleListItem(
+        return await ToListItems(rows
+                .OrderByDescending(r => r.Sale.SaleDate)
+                .ThenByDescending(r => r.Sale.CreatedAt)
+                .ThenBy(r => r.Sale.Id))
+            .ToPagedResultAsync(query, ct);
+    }
+
+    public async Task<SaleDebtsResponse> GetDebtsAsync(CancellationToken ct)
+    {
+        currentUser.EnsureCanManageFinance();
+
+        // Công nợ tính theo thanh toán chưa hủy; giao dịch đã hủy không còn nợ.
+        var items = await ToListItems(SaleAmounts.Of(db.Sales.AsNoTracking().Where(s => s.VoidedAt == null))
+                .Where(r => r.Revenue - r.PaidAmount > 0)
+                .OrderBy(r => r.Sale.SaleDate)
+                .ThenBy(r => r.Sale.CreatedAt)
+                .ThenBy(r => r.Sale.Id))
+            .ToListAsync(ct);
+
+        return new SaleDebtsResponse(items.Count, items.Sum(i => i.OutstandingAmount), items);
+    }
+
+    public async Task<SaleResponse> CorrectAsync(Guid id, CorrectSaleRequest request, CancellationToken ct)
+    {
+        currentUser.EnsureCanManageFinance();
+
+        var seasonId = await ReadTargetSeasonIdAsync(id, ct);
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // BR-GEN-12: khóa seasons trước, sales sau để không khóa chéo; mùa vụ phải InProgress (mục 4.3).
+        var season = await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.ManageSales, forUpdate: true, ct);
+        var sale = await LockSaleAsync(id, ct);
+
+        // BR-GEN-11: người khác đã sửa sau lần đọc của người này thì không ghi đè.
+        if (sale.Version != request.Version)
+        {
+            throw ConcurrencyConflict();
+        }
+
+        db.Entry(sale).Property(s => s.Version).OriginalValue = request.Version;
+
+        // Validator đã bảo đảm các trường bắt buộc có giá trị.
+        var qualityGrade = request.QualityGrade!.Value;
+        var saleDate = request.SaleDate!.Value;
+
+        // BR-GEN-13: đổi sang khách hàng khác thì khách hàng mới phải Active; giữ nguyên thì không kiểm tra.
+        if (request.CustomerId is { } customerId && customerId != sale.CustomerId)
+        {
+            await EnsureCustomerActiveAsync(customerId, ct);
+        }
+
+        EnsureSaleDateNotBeforeSeasonStart(saleDate, season.StartDate);
+
+        // BR-SAL-03: tồn tính sau khi hoàn lại lượng của chính giao dịch này (currentSaleId), đúng cả khi đổi loại.
+        await produceStock.EnsureSufficientStockForSaleAsync(seasonId, qualityGrade, request.Quantity, currentSaleId: id, ct);
+
+        // BR-SAL-03: doanh thu mới không nhỏ hơn tổng đã thu.
+        var revenue = Math.Round(request.Quantity * request.UnitPrice, 2);
+        var paid = await db.Payments.Where(p => p.SaleId == id && p.VoidedAt == null).SumAsync(p => p.Amount, ct);
+        if (revenue < paid)
+        {
+            throw new AppException(
+                ErrorCodes.RevenueBelowPaid,
+                $"Doanh thu sau khi sửa {revenue:N0} ₫ nhỏ hơn số đã thu {paid:N0} ₫. Hủy bớt thanh toán trước khi sửa.",
+                new { revenue, paidAmount = paid });
+        }
+
+        // BR-SAL-03, BR-SAL-05: danh sách phiếu thu gửi lên thay toàn bộ liên kết cũ; đổi loại thì liên kết cũ không còn khớp.
+        var oldHarvestRecordIds = await db.SaleHarvestLinks
+            .Where(l => l.SaleId == id)
+            .Select(l => l.HarvestRecordId)
+            .OrderBy(h => h)
+            .ToListAsync(ct);
+        var gradeChanged = qualityGrade != sale.QualityGrade;
+        var newHarvestRecordIds = request.HarvestRecordIds is { } requested
+            ? requested.Distinct().Order().ToList()
+            : gradeChanged ? [] : oldHarvestRecordIds;
+        await produceStock.ValidateHarvestLinksForSaleAsync(seasonId, qualityGrade, newHarvestRecordIds, ct);
+
+        var channel = request.Channel;
+        sale.CustomerId = request.CustomerId;
+        sale.Channel = channel;
+        sale.ChannelOther = channel == SalesChannel.Other ? TrimToNull(request.ChannelOther) : null;
+        sale.QualityGrade = qualityGrade;
+        sale.Quantity = request.Quantity;
+        sale.UnitPrice = request.UnitPrice;
+        sale.SaleDate = saleDate;
+        sale.Note = TrimToNull(request.Note);
+
+        // BR-GEN-08: nhật ký chỉ lưu các trường đổi, kể cả danh sách phiếu thu cũ và mới (BR-SAL-03).
+        var changes = ChangedValues.Of(db.Entry(sale));
+        var oldValues = new Dictionary<string, object?>(changes.OldValues);
+        var newValues = new Dictionary<string, object?>(changes.NewValues);
+        if (!oldHarvestRecordIds.SequenceEqual(newHarvestRecordIds))
+        {
+            // Bảng nối được xóa thật khi sửa liên kết.
+            await db.SaleHarvestLinks.Where(l => l.SaleId == id).ExecuteDeleteAsync(ct);
+            db.SaleHarvestLinks.AddRange(newHarvestRecordIds.Select(harvestRecordId => new SaleHarvestLink
+            {
+                SaleId = id,
+                HarvestRecordId = harvestRecordId,
+            }));
+            oldValues["harvestRecordIds"] = oldHarvestRecordIds;
+            newValues["harvestRecordIds"] = newHarvestRecordIds;
+        }
+
+        if (oldValues.Count > 0)
+        {
+            audit.Log(AuditActions.SaleCorrect, id, oldValues, newValues, request.Reason.Trim());
+            await db.SaveChangesAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return await ReadResponseAsync(id, ct);
+    }
+
+    public async Task<SaleResponse> VoidAsync(Guid id, VoidSaleRequest request, CancellationToken ct)
+    {
+        currentUser.EnsureCanManageFinance();
+
+        var seasonId = await ReadTargetSeasonIdAsync(id, ct);
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // BR-GEN-12: khóa seasons trước, sales sau; mùa vụ phải InProgress (mục 4.3).
+        await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.ManageSales, forUpdate: true, ct);
+        var sale = await LockSaleAsync(id, ct);
+
+        // BR-SAL-04: chỉ hủy khi mọi thanh toán đã hủy. Đọc sau khi khóa sales nên không ai ghi thanh toán xen vào.
+        var activePayments = await db.Payments.CountAsync(p => p.SaleId == id && p.VoidedAt == null, ct);
+        if (activePayments > 0)
+        {
+            throw new AppException(
+                ErrorCodes.SaleHasPayments,
+                $"Giao dịch bán còn {activePayments} lần thanh toán chưa hủy. Hủy các thanh toán đó trước khi hủy giao dịch.");
+        }
+
+        // BR-GEN-09: điền ba cột Void, giao dịch bị loại khỏi mọi phép tính tổng (tồn nông sản tăng lại).
+        var reason = request.Reason.Trim();
+        sale.VoidedAt = clock.UtcNow;
+        sale.VoidedById = currentUser.UserId;
+        sale.VoidReason = reason;
+
+        audit.Log(AuditActions.SaleVoid, id, oldValues: null, new { sale.Quantity, sale.UnitPrice, sale.SaleDate }, reason);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return await ReadResponseAsync(id, ct);
+    }
+
+    // Đọc trước khi khóa để biết mùa vụ cần khóa (BR-GEN-12: khóa seasons trước). Báo đã hủy trước khi kiểm tra mùa vụ:
+    // hủy lần hai thì lý do thật là ở đây, không phải vì mùa vụ đã chốt.
+    private async Task<Guid> ReadTargetSeasonIdAsync(Guid id, CancellationToken ct)
+    {
+        var target = await db.Sales
+            .AsNoTracking()
+            .Where(s => s.Id == id)
+            .Select(s => new { s.SeasonId, s.VoidedAt })
+            .SingleOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("giao dịch bán");
+
+        if (target.VoidedAt is not null)
+        {
+            throw AlreadyVoided();
+        }
+
+        return target.SeasonId;
+    }
+
+    // Khóa dòng giao dịch bán sau mùa vụ: hai người cùng sửa, hủy thì người sau thấy kết quả của người trước.
+    private async Task<Sale> LockSaleAsync(Guid id, CancellationToken ct)
+    {
+        var sale = await db.Sales
+            .FromSql($"SELECT *, xmin FROM sales WHERE id = {id} FOR UPDATE")
+            .SingleOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("giao dịch bán");
+
+        if (sale.VoidedAt is not null)
+        {
+            throw AlreadyVoided();
+        }
+
+        return sale;
+    }
+
+    private static IQueryable<SaleListItem> ToListItems(IQueryable<SaleAmountRow> rows) =>
+        rows.Select(r => new SaleListItem(
                 r.Sale.Id,
                 r.Sale.SaleDate,
                 r.Sale.SeasonId,
@@ -89,9 +274,7 @@ public sealed class SaleService(
                 r.PaidAmount >= r.Revenue
                     ? PaymentStatus.Paid
                     : r.PaidAmount == 0 ? PaymentStatus.Unpaid : PaymentStatus.PartiallyPaid,
-                r.Sale.VoidedAt))
-            .ToPagedResultAsync(query, ct);
-    }
+                r.Sale.VoidedAt));
 
     public async Task<SaleResponse> GetAsync(Guid id, CancellationToken ct)
     {
@@ -232,6 +415,13 @@ public sealed class SaleService(
                     .OrderBy(l => l.HarvestRecord.HarvestDate)
                     .Select(l => new SaleHarvestLinkItem(l.HarvestRecordId, l.HarvestRecord.HarvestDate, l.HarvestRecord.Quantity))
                     .ToList(),
+                // Gồm cả thanh toán đã hủy để giao diện hiện lịch sử; đã thu chỉ tính thanh toán chưa hủy.
+                r.Sale.Payments
+                    .OrderByDescending(p => p.PaymentDate)
+                    .ThenByDescending(p => p.CreatedAt)
+                    .Select(p => new PaymentResponse(
+                        p.Id, p.SaleId, p.Amount, p.PaymentDate, p.Note, p.VoidedAt, p.VoidReason, p.CreatedAt))
+                    .ToList(),
                 r.Sale.VoidedAt,
                 r.Sale.VoidReason,
                 r.Sale.CreatedAt,
@@ -254,4 +444,10 @@ public sealed class SaleService(
     };
 
     private static string? TrimToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static AppException AlreadyVoided() =>
+        new(ErrorCodes.AlreadyVoided, "Giao dịch bán này đã được hủy trước đó.");
+
+    private static AppException ConcurrencyConflict() =>
+        new(ErrorCodes.ConcurrencyConflict, "Giao dịch bán đã bị người khác sửa hoặc hủy. Hãy tải lại rồi thử lại.");
 }

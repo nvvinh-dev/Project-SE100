@@ -3,6 +3,8 @@ import type { RouteHandle } from "@/app/route-handle";
 import { CustomerCreatePage } from "@/features/sales/pages/CustomerCreatePage";
 import { CustomerEditPage } from "@/features/sales/pages/CustomerEditPage";
 import { CustomerListPage } from "@/features/sales/pages/CustomerListPage";
+import { DebtListPage } from "@/features/sales/pages/DebtListPage";
+import { SaleCorrectPage } from "@/features/sales/pages/SaleCorrectPage";
 import { SaleCreatePage } from "@/features/sales/pages/SaleCreatePage";
 import { SaleDetailPage } from "@/features/sales/pages/SaleDetailPage";
 import { SaleListPage } from "@/features/sales/pages/SaleListPage";
@@ -20,6 +22,12 @@ export const salesRoutes: RouteObject[] = [
     handle: { access: ACCESS.financeManager, form: true } satisfies RouteHandle,
   },
   { path: "/sales/:id", element: <SaleDetailPage />, handle: { access: ACCESS.financeManager } satisfies RouteHandle },
+  {
+    path: "/sales/:id/correct",
+    element: <SaleCorrectPage />,
+    handle: { access: ACCESS.financeManager, form: true } satisfies RouteHandle,
+  },
+  { path: "/debts", element: <DebtListPage />, handle: { access: ACCESS.financeManager } satisfies RouteHandle },
   { path: "/customers", element: <CustomerListPage />, handle: { access: ACCESS.financeManager } satisfies RouteHandle },
   {
     path: "/customers/new",
