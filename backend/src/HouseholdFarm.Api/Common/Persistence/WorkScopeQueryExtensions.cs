@@ -42,6 +42,27 @@ public static class WorkScopeQueryExtensions
         return plots;
     }
 
+    /// <summary>
+    /// Cây trồng trong phạm vi: Chủ hộ, Thành viên hộ thấy mọi cây của hộ (ma trận phân quyền, nhóm Danh mục);
+    /// Nhân công chỉ thấy cây của mùa vụ có công việc giao cho mình, và service chỉ trả tên cây (BR-USR-14).
+    /// </summary>
+    /// <param name="farmTasks">Bảng công việc, dùng để tìm cây của Nhân công vì cây không có danh sách mùa vụ.</param>
+    public static IQueryable<Crop> VisibleTo(this IQueryable<Crop> crops, IQueryable<FarmTask> farmTasks, ICurrentUser user)
+    {
+        if (!user.IsAuthenticated || user.Role == UserRole.SystemAdmin)
+        {
+            return crops.Where(_ => false);
+        }
+
+        if (IsWorker(user))
+        {
+            var userId = user.UserId;
+            return crops.Where(c => farmTasks.Any(t => t.AssigneeId == userId && t.Season.CropId == c.Id));
+        }
+
+        return crops;
+    }
+
     /// <summary>Mùa vụ trong phạm vi làm việc (phần sản xuất của mùa vụ).</summary>
     public static IQueryable<Season> VisibleTo(this IQueryable<Season> seasons, ICurrentUser user) =>
         SeasonIdsInScope(user) is { } ids ? seasons.Where(s => ids.Contains(s.Id)) : seasons;

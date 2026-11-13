@@ -11,6 +11,7 @@ using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Features.Auth;
+using HouseholdFarm.Api.Features.Crops;
 using HouseholdFarm.Api.Features.Expenses;
 using HouseholdFarm.Api.Features.Plots;
 using HouseholdFarm.Api.Features.Harvests;
@@ -86,6 +87,7 @@ builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPlotService, PlotService>();
+builder.Services.AddScoped<ICropService, CropService>();
 builder.Services.AddScoped<ISeasonService, SeasonService>();
 builder.Services.AddScoped<ISeasonAssignmentService, SeasonAssignmentService>();
 builder.Services.AddScoped<ISeasonNoteService, SeasonNoteService>();
