@@ -214,7 +214,16 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
             season,
             new DateOnly(2026, 10, 10),
             ct,
+            createdBy: household.Member,
             supplies: (supply1, 4m, null, null));
+
+        var ownerPendingTask = await FarmTaskTestData.CreateTaskAsync(
+            factory.Postgres,
+            household,
+            season,
+            new DateOnly(2026, 10, 11),
+            ct,
+            createdBy: household.Owner);
 
         var doneTask = await FarmTaskTestData.CreateTaskAsync(
             factory.Postgres,
@@ -222,6 +231,7 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
             season,
             new DateOnly(2026, 10, 9),
             ct,
+            createdBy: household.Member,
             status: FarmTaskStatus.Done);
 
         var closedSeasonTask = await FarmTaskTestData.CreateTaskAsync(
@@ -322,6 +332,14 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
         var cancelledData = (await cancelRes.ReadJsonAsync(ct)).GetProperty("data");
         Assert.Equal("Cancelled", cancelledData.GetProperty("status").GetString());
         Assert.NotEqual(JsonValueKind.Null, cancelledData.GetProperty("cancelledAt").ValueKind);
+
+        // Thành viên không sửa được việc do Chủ hộ tạo -> FORBIDDEN
+        var forbiddenEditRes = await memberClient.PutAsJsonAsync(
+            $"{TasksPath}/{ownerPendingTask.Id}",
+            updateReq with { Version = ownerPendingTask.Version },
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await forbiddenEditRes.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
 
         // Sửa công việc đã Done -> TASK_INVALID_STATE
         var editDoneRes = await ownerClient.PutAsJsonAsync(

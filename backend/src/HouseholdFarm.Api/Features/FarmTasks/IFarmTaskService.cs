@@ -27,4 +27,7 @@ public interface IFarmTaskService
 
     /// <summary>Hủy toàn bộ công việc chưa thực hiện trong nhóm lặp chứa công việc đã chọn (FR-TSK-11, BR-TSK-04).</summary>
     Task<CancelRecurrenceGroupResponse> CancelRecurrenceGroupAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Ghi hoặc bổ sung kết quả thực hiện công việc (FR-TSK-04..07, FR-TSK-10).</summary>
+    Task<object> RecordResultAsync(Guid id, RecordFarmTaskResultRequest request, CancellationToken ct);
 }
