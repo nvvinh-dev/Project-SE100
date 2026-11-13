@@ -36,6 +36,33 @@ export interface SeasonResponse {
   version: number;
 }
 
+// Dữ liệu tạo mùa vụ mới (FR-SEA-01).
+export interface CreateSeasonRequest {
+  plotId: string;
+  cropId: string;
+  startDate: string;
+  expectedHarvestDate: string;
+  targetYield: number;
+}
+
+// Dữ liệu sửa mùa vụ (FR-SEA-07, BR-GEN-11).
+export interface UpdateSeasonRequest {
+  plotId: string;
+  cropId: string;
+  startDate: string;
+  expectedHarvestDate: string;
+  targetYield: number;
+  version: number;
+}
+
+// Thông tin rút gọn của cây trồng dùng cho ô chọn cây (FR-SEA-01, FR-SEA-02).
+export interface CropOptionItem {
+  id: string;
+  name: string;
+  yieldUnit: Unit;
+  status?: string;
+}
+
 // Một dòng trong danh sách mùa vụ (FR-SEA-11).
 export interface SeasonListItem {
   id: string;
