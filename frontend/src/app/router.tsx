@@ -8,6 +8,7 @@ import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
 import { accountRoutes, authRoutes } from "@/features/auth/routes";
 import { expenseRoutes } from "@/features/expenses/routes";
 import { cropRoutes } from "@/features/crops/routes";
+import { farmTaskRoutes } from "@/features/farm-tasks/routes";
 import { plotRoutes } from "@/features/plots/routes";
 import { salesRoutes } from "@/features/sales/routes";
 import { seasonRoutes } from "@/features/seasons/routes";
@@ -37,6 +38,7 @@ const routes: RouteObject[] = [
           ...plotRoutes,
           ...cropRoutes,
           ...seasonRoutes,
+          ...farmTaskRoutes,
           ...supplyRoutes,
           ...expenseRoutes,
           ...salesRoutes,
