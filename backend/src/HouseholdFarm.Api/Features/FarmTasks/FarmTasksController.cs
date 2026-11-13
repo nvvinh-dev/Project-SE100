@@ -57,6 +57,13 @@ public sealed class FarmTasksController(IFarmTaskService farmTaskService) : Cont
         CancellationToken ct) =>
         Ok(await farmTaskService.CancelAsync(id, request, ct));
 
+    [HttpPost("{id:guid}/record-result")]
+    public async Task<ActionResult<FarmTaskResponse>> RecordResultAsync(
+        Guid id,
+        RecordFarmTaskResultRequest request,
+        CancellationToken ct) =>
+        Ok(await farmTaskService.RecordResultAsync(id, request, ct));
+
     [HttpPost("recurrence-groups/{recurrenceGroupId:guid}/cancel")]
     public async Task<ActionResult<CancelRecurrenceGroupResponse>> CancelRecurrenceGroupAsync(
         Guid recurrenceGroupId,

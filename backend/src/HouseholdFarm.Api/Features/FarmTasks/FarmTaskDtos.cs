@@ -51,6 +51,22 @@ public sealed record UpdateFarmTaskRequest(
 /// <summary>Hủy một công việc khi chưa thực hiện (FR-TSK-03, BR-TSK-01).</summary>
 public sealed record CancelFarmTaskRequest(uint Version);
 
+/// <summary>Vật tư thực tế sử dụng khi ghi kết quả công việc (FR-TSK-04, FR-TSK-05).</summary>
+public sealed record FarmTaskActualSupplyInput(
+    Guid? SupplyId,
+    decimal? ActualQuantity);
+
+/// <summary>Ghi hoặc bổ sung kết quả thực hiện công việc (FR-TSK-04..07, FR-TSK-10).</summary>
+public sealed record RecordFarmTaskResultRequest(
+    FarmTaskStatus? Status,
+    DateOnly? PerformedDate,
+    int? ActualDurationMinutes,
+    string? AbnormalNote,
+    string? FieldNote,
+    IReadOnlyList<FarmTaskActualSupplyInput>? Supplies,
+    string? Reason,
+    uint Version);
+
 /// <summary>Kết quả hủy nhóm công việc lặp (FR-TSK-11, BR-TSK-04).</summary>
 public sealed record CancelRecurrenceGroupResponse(
     Guid RecurrenceGroupId,

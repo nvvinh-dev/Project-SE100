@@ -183,3 +183,70 @@ public sealed class FarmTaskQueryValidator : AbstractValidator<FarmTaskQuery>
         });
     }
 }
+
+public sealed class FarmTaskActualSupplyInputValidator : AbstractValidator<FarmTaskActualSupplyInput>
+{
+    public FarmTaskActualSupplyInputValidator()
+    {
+        RuleFor(x => x.SupplyId)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Vui lòng chọn vật tư.")
+            .NotEqual(Guid.Empty).WithMessage("Vật tư không hợp lệ.");
+
+        When(x => x.ActualQuantity.HasValue, () =>
+        {
+            RuleFor(x => x.ActualQuantity!.Value)
+                .Cascade(CascadeMode.Stop)
+                .GreaterThan(0).WithMessage("Lượng vật tư thực dùng phải lớn hơn 0.")
+                .PrecisionScale(18, 3, ignoreTrailingZeros: true)
+                .WithMessage("Lượng vật tư tối đa 3 chữ số sau dấu phẩy và 15 chữ số phần nguyên.");
+        });
+    }
+}
+
+public sealed class RecordFarmTaskResultRequestValidator : AbstractValidator<RecordFarmTaskResultRequest>
+{
+    public RecordFarmTaskResultRequestValidator()
+    {
+        RuleFor(r => r.Status)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Vui lòng chọn trạng thái kết quả công việc.")
+            .IsInEnum().WithMessage("Trạng thái công việc không hợp lệ.")
+            .Must(s => s is FarmTaskStatus.Done or FarmTaskStatus.WaitingForSupply)
+            .WithMessage("Trạng thái kết quả chỉ có thể là Hoàn thành hoặc Chờ bổ sung vật tư.");
+
+        // BR-TSK-05: chuyển Hoàn thành bắt buộc có ngày thực hiện.
+        When(r => r.Status == FarmTaskStatus.Done, () =>
+        {
+            RuleFor(r => r.PerformedDate)
+                .NotNull().WithMessage("Vui lòng chọn ngày thực hiện thực tế.");
+        });
+
+        When(r => r.ActualDurationMinutes.HasValue, () =>
+        {
+            RuleFor(r => r.ActualDurationMinutes!.Value)
+                .GreaterThan(0).WithMessage("Thời lượng thực tế phải lớn hơn 0 phút.");
+        });
+
+        RuleFor(r => r.AbnormalNote)
+            .MaximumLength(2000).WithMessage("Ghi chú bất thường tối đa 2000 ký tự.");
+
+        RuleFor(r => r.FieldNote)
+            .MaximumLength(2000).WithMessage("Ghi chú hiện trường tối đa 2000 ký tự.");
+
+        RuleFor(r => r.Reason)
+            .MaximumLength(500).WithMessage("Lý do tối đa 500 ký tự.");
+
+        RuleForEach(r => r.Supplies!)
+            .SetValidator(new FarmTaskActualSupplyInputValidator())
+            .When(r => r.Supplies is not null);
+
+        RuleFor(r => r.Supplies)
+            .Must(supplies => supplies is null || supplies
+                .Where(s => s.SupplyId.HasValue && s.SupplyId.Value != Guid.Empty)
+                .Select(s => s.SupplyId!.Value)
+                .Distinct()
+                .Count() == supplies.Count(s => s.SupplyId.HasValue && s.SupplyId.Value != Guid.Empty))
+            .WithMessage("Mỗi vật tư chỉ được khai báo một dòng trong công việc.");
+    }
+}

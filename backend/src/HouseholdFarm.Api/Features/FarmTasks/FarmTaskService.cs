@@ -182,50 +182,7 @@ public sealed class FarmTaskService(
             .FirstOrDefaultAsync(t => t.Id == id, ct)
             ?? throw AppException.NotFound("công việc");
 
-        var today = clock.Today;
-        var isOverdue = ComputeIsOverdue(task.Status, task.ScheduledDate, today);
-
-        if (currentUser.Role == UserRole.Worker)
-        {
-            // BR-USR-14: tách kiểu phản hồi riêng cho Nhân công để JSON không mang các trường tồn kho, người tạo hay chi phí.
-            var workerSupplies = task.SupplyUsages
-                .OrderBy(u => u.Supply.Name)
-                .ThenBy(u => u.Id)
-                .Select(u => new WorkerFarmTaskSupplyItem(
-                    u.Id,
-                    u.SupplyId,
-                    u.Supply.Name,
-                    u.Supply.Unit,
-                    u.PlannedQuantity))
-                .ToList();
-
-            return new WorkerFarmTaskResponse(
-                task.Id,
-                task.SeasonId,
-                task.Season.PlotId,
-                task.Season.Plot.Code,
-                task.Season.CropId,
-                task.Season.Crop.Name,
-                task.AssigneeId,
-                task.Assignee?.FullName,
-                task.Type,
-                task.TypeOther,
-                task.ScheduledDate,
-                task.PlannedDurationMinutes,
-                task.Note,
-                task.Status,
-                isOverdue,
-                task.PerformedDate,
-                task.ActualDurationMinutes,
-                task.AbnormalNote,
-                task.FieldNote,
-                task.CompletedAt,
-                task.UpdatedAt,
-                task.Version,
-                workerSupplies);
-        }
-
-        return await BuildOwnerOrMemberResponseAsync(task, today, ct);
+        return await BuildDetailResultForCurrentUserAsync(task, ct);
     }
 
     public async Task<FarmTaskResponse> CreateAsync(CreateFarmTaskRequest request, CancellationToken ct)
@@ -358,6 +315,11 @@ public sealed class FarmTaskService(
             .FirstOrDefaultAsync(t => t.Id == id, ct)
             ?? throw AppException.NotFound("công việc");
 
+        if (currentUser.Role == UserRole.Member && task.CreatedById != currentUser.UserId)
+        {
+            throw new AppException(ErrorCodes.Forbidden, "Thành viên hộ chỉ được sửa công việc do mình tạo.");
+        }
+
         // BR-TSK-01: chỉ sửa khi công việc đang Chưa làm hoặc Chờ bổ sung vật tư.
         if (task.Status is not (FarmTaskStatus.Pending or FarmTaskStatus.WaitingForSupply))
         {
@@ -426,6 +388,11 @@ public sealed class FarmTaskService(
             .FirstOrDefaultAsync(t => t.Id == id, ct)
             ?? throw AppException.NotFound("công việc");
 
+        if (currentUser.Role == UserRole.Member && task.CreatedById != currentUser.UserId)
+        {
+            throw new AppException(ErrorCodes.Forbidden, "Thành viên hộ chỉ được hủy công việc do mình tạo.");
+        }
+
         // BR-TSK-01: chỉ hủy khi công việc đang Chưa làm hoặc Chờ bổ sung vật tư.
         if (task.Status is not (FarmTaskStatus.Pending or FarmTaskStatus.WaitingForSupply))
         {
@@ -461,6 +428,11 @@ public sealed class FarmTaskService(
             throw AppException.NotFound("nhóm công việc lặp");
         }
 
+        if (currentUser.Role == UserRole.Member && groupTasks.Any(t => t.CreatedById != currentUser.UserId))
+        {
+            throw new AppException(ErrorCodes.Forbidden, "Thành viên hộ chỉ được hủy nhóm công việc do mình tạo.");
+        }
+
         var seasonId = groupTasks[0].SeasonId;
         await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.ManageFarmTasks, forUpdate: false, ct);
 
@@ -486,6 +458,291 @@ public sealed class FarmTaskService(
         await SaveWithConcurrencyCheckAsync(ct);
 
         return new CancelRecurrenceGroupResponse(recurrenceGroupId, cancellableTasks.Count);
+    }
+
+    public async Task<object> RecordResultAsync(Guid id, RecordFarmTaskResultRequest request, CancellationToken ct)
+    {
+        currentUser.EnsureHouseholdUser();
+
+        var today = clock.Today;
+        var targetStatus = request.Status!.Value;
+
+        if (request.PerformedDate.HasValue && request.PerformedDate.Value > today)
+        {
+            throw AppException.Validation(new Dictionary<string, string[]>
+            {
+                ["performedDate"] = ["Ngày thực hiện không được ở tương lai."],
+            });
+        }
+
+        // BR-TSK-07: Nhân công chỉ ghi xác nhận Done, ngày thực hiện, thời lượng và ghi chú; không ghi vật tư.
+        if (currentUser.Role == UserRole.Worker &&
+            (targetStatus != FarmTaskStatus.Done
+             || request.Supplies is { Count: > 0 }
+             || !string.IsNullOrWhiteSpace(request.Reason)))
+        {
+            throw new AppException(
+                ErrorCodes.Forbidden,
+                "Nhân công chỉ được xác nhận hoàn thành và ghi chú, không được cập nhật vật tư hoặc chuyển trạng thái chờ vật tư.");
+        }
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var seasonId = await db.FarmTasks
+            .AsNoTracking()
+            .VisibleTo(currentUser)
+            .Where(t => t.Id == id)
+            .Select(t => (Guid?)t.SeasonId)
+            .FirstOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("công việc");
+
+        // BR-GEN-12: khóa dòng mùa vụ trước khi đọc và cập nhật công việc, vật tư trong giao dịch.
+        // Nhân công không thấy mùa vụ qua Seasons.VisibleTo (BR-USR-14), nên khóa và kiểm tra trực tiếp trạng thái InProgress của mùa vụ chứa việc được giao.
+        if (currentUser.Role == UserRole.Worker)
+        {
+            await LockAndEnsureSeasonInProgressForWorkerAsync(seasonId, ct);
+        }
+        else
+        {
+            await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.RecordFarmTaskResult, forUpdate: true, ct);
+        }
+
+        var task = await db.FarmTasks
+            .VisibleTo(currentUser)
+            .Include(t => t.SupplyUsages)
+            .FirstOrDefaultAsync(t => t.Id == id, ct)
+            ?? throw AppException.NotFound("công việc");
+
+        if (currentUser.Role == UserRole.Member
+            && task.CreatedById != currentUser.UserId
+            && task.AssigneeId != currentUser.UserId)
+        {
+            throw new AppException(
+                ErrorCodes.Forbidden,
+                "Thành viên hộ chỉ được ghi kết quả cho công việc do mình tạo hoặc được giao cho mình.");
+        }
+
+        // BR-TSK-06: Đã hủy không thể ghi kết quả; Đã hoàn thành chỉ được bổ sung dữ liệu, không quay lại trạng thái khác.
+        if (task.Status == FarmTaskStatus.Cancelled)
+        {
+            throw new AppException(ErrorCodes.TaskInvalidState, "Không thể ghi kết quả cho công việc đã hủy.");
+        }
+
+        if (task.Status == FarmTaskStatus.Done && targetStatus != FarmTaskStatus.Done)
+        {
+            throw new AppException(
+                ErrorCodes.TaskInvalidState,
+                "Công việc đã hoàn thành không thể chuyển sang trạng thái khác.");
+        }
+
+        // BR-GEN-11: kiểm tra version ngay sau khi khóa mùa vụ, trước khi thao tác kho.
+        if (task.Version != request.Version)
+        {
+            throw new AppException(
+                ErrorCodes.ConcurrencyConflict,
+                "Công việc này vừa được người khác cập nhật. Vui lòng tải lại trước khi lưu.");
+        }
+
+        db.Entry(task).Property(t => t.Version).OriginalValue = request.Version;
+
+        if (currentUser.Role != UserRole.Worker && request.Supplies is not null)
+        {
+            await ApplyActualSuppliesAsync(task, targetStatus, request.PerformedDate, request.Supplies, request.Reason, ct);
+        }
+
+        if (task.Status != FarmTaskStatus.Done && targetStatus == FarmTaskStatus.Done)
+        {
+            task.CompletedAt = clock.UtcNow;
+        }
+
+        task.Status = targetStatus;
+        task.PerformedDate = request.PerformedDate ?? task.PerformedDate;
+        task.ActualDurationMinutes = request.ActualDurationMinutes;
+        task.AbnormalNote = TrimToNull(request.AbnormalNote);
+        task.FieldNote = TrimToNull(request.FieldNote);
+
+        await SaveWithConcurrencyCheckAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var loaded = await LoadTaskQuery().AsNoTracking().FirstAsync(t => t.Id == task.Id, ct);
+        return await BuildDetailResultForCurrentUserAsync(loaded, ct);
+    }
+
+    private async Task ApplyActualSuppliesAsync(
+        FarmTask task,
+        FarmTaskStatus targetStatus,
+        DateOnly? performedDate,
+        IReadOnlyList<FarmTaskActualSupplyInput> inputs,
+        string? rawReason,
+        CancellationToken ct)
+    {
+        if (targetStatus == FarmTaskStatus.WaitingForSupply && inputs.Any(s => s.ActualQuantity is > 0))
+        {
+            throw AppException.Validation(new Dictionary<string, string[]>
+            {
+                ["supplies"] = ["Khi chuyển công việc sang Chờ bổ sung vật tư thì không xuất kho vật tư."],
+            });
+        }
+
+        var existingBySupply = task.SupplyUsages.ToDictionary(u => u.SupplyId);
+        var desiredBySupply = inputs.ToDictionary(s => s.SupplyId!.Value, s => s.ActualQuantity);
+
+        await EnsurePlannedSuppliesValidAsync(desiredBySupply.Keys, existingBySupply.Keys.ToHashSet(), ct);
+
+        var reason = TrimToNull(rawReason);
+
+        // Sắp xếp theo SupplyId tăng dần để tránh khóa chéo khi gọi IStockService cho nhiều vật tư.
+        var allSupplyIds = existingBySupply.Keys
+            .Union(desiredBySupply.Keys)
+            .OrderBy(id => id)
+            .ToList();
+
+        foreach (var supplyId in allSupplyIds)
+        {
+            existingBySupply.TryGetValue(supplyId, out var existing);
+            var inDesired = desiredBySupply.TryGetValue(supplyId, out var newActual);
+
+            if (existing is not null && existing.StockTransactionId is { } oldTxId)
+            {
+                var quantityRemovedOrCleared = !inDesired || newActual is null or <= 0;
+                var quantityChanged = inDesired && newActual != existing.ActualQuantity;
+
+                if (quantityRemovedOrCleared)
+                {
+                    if (reason is null)
+                    {
+                        throw AppException.Validation(new Dictionary<string, string[]>
+                        {
+                            ["reason"] = ["Vui lòng nhập lý do khi hủy hoặc bỏ vật tư đã xuất kho."],
+                        });
+                    }
+
+                    // BR-TSK-10: bỏ lượng thực dùng -> Void giao dịch xuất cũ.
+                    await stockService.VoidFarmTaskStockOutAsync(oldTxId, reason, ct);
+                    existing.StockTransactionId = null;
+                    existing.ActualQuantity = null;
+
+                    if (!inDesired || existing.PlannedQuantity is null)
+                    {
+                        db.FarmTaskSupplyUsages.Remove(existing);
+                    }
+                }
+                else if (quantityChanged)
+                {
+                    if (reason is null)
+                    {
+                        throw AppException.Validation(new Dictionary<string, string[]>
+                        {
+                            ["reason"] = ["Vui lòng nhập lý do khi sửa lượng vật tư đã xuất kho."],
+                        });
+                    }
+
+                    // BR-TSK-10: Void giao dịch cũ trước khi xuất kho lại lượng mới trong cùng giao dịch database.
+                    await stockService.VoidFarmTaskStockOutAsync(oldTxId, reason, ct);
+                    existing.StockTransactionId = null;
+                    existing.ActualQuantity = null;
+
+                    var newTx = await stockService.StockOutForFarmTaskAsync(
+                        task.Id,
+                        supplyId,
+                        newActual!.Value,
+                        performedDate,
+                        ct);
+                    existing.ActualQuantity = newActual.Value;
+                    existing.StockTransactionId = newTx.Id;
+                }
+
+                // BR-TSK-08: cùng ActualQuantity với dòng đã có StockTransactionId -> không tạo giao dịch mới.
+                continue;
+            }
+
+            if (!inDesired)
+            {
+                if (existing is not null)
+                {
+                    db.FarmTaskSupplyUsages.Remove(existing);
+                }
+                continue;
+            }
+
+            if (targetStatus == FarmTaskStatus.Done && newActual is > 0)
+            {
+                var createdTx = await stockService.StockOutForFarmTaskAsync(
+                    task.Id,
+                    supplyId,
+                    newActual.Value,
+                    performedDate,
+                    ct);
+
+                if (existing is not null)
+                {
+                    existing.ActualQuantity = newActual.Value;
+                    existing.StockTransactionId = createdTx.Id;
+                }
+                else
+                {
+                    db.FarmTaskSupplyUsages.Add(new FarmTaskSupplyUsage
+                    {
+                        FarmTaskId = task.Id,
+                        SupplyId = supplyId,
+                        ActualQuantity = newActual.Value,
+                        StockTransactionId = createdTx.Id,
+                    });
+                }
+            }
+            else if (existing is not null && existing.PlannedQuantity is null)
+            {
+                db.FarmTaskSupplyUsages.Remove(existing);
+            }
+        }
+    }
+
+    private async Task<object> BuildDetailResultForCurrentUserAsync(FarmTask task, CancellationToken ct)
+    {
+        var today = clock.Today;
+        var isOverdue = ComputeIsOverdue(task.Status, task.ScheduledDate, today);
+
+        if (currentUser.Role == UserRole.Worker)
+        {
+            // BR-USR-14: tách kiểu phản hồi riêng cho Nhân công để JSON không mang các trường tồn kho, người tạo hay chi phí.
+            var workerSupplies = task.SupplyUsages
+                .OrderBy(u => u.Supply.Name)
+                .ThenBy(u => u.Id)
+                .Select(u => new WorkerFarmTaskSupplyItem(
+                    u.Id,
+                    u.SupplyId,
+                    u.Supply.Name,
+                    u.Supply.Unit,
+                    u.PlannedQuantity))
+                .ToList();
+
+            return new WorkerFarmTaskResponse(
+                task.Id,
+                task.SeasonId,
+                task.Season.PlotId,
+                task.Season.Plot.Code,
+                task.Season.CropId,
+                task.Season.Crop.Name,
+                task.AssigneeId,
+                task.Assignee?.FullName,
+                task.Type,
+                task.TypeOther,
+                task.ScheduledDate,
+                task.PlannedDurationMinutes,
+                task.Note,
+                task.Status,
+                isOverdue,
+                task.PerformedDate,
+                task.ActualDurationMinutes,
+                task.AbnormalNote,
+                task.FieldNote,
+                task.CompletedAt,
+                task.UpdatedAt,
+                task.Version,
+                workerSupplies);
+        }
+
+        return await BuildOwnerOrMemberResponseAsync(task, today, ct);
     }
 
     private IQueryable<FarmTask> LoadTaskQuery() => db.FarmTasks
@@ -664,6 +921,30 @@ public sealed class FarmTaskService(
             task.UpdatedAt,
             task.Version,
             supplies);
+    }
+
+    private async Task LockAndEnsureSeasonInProgressForWorkerAsync(Guid seasonId, CancellationToken ct)
+    {
+        if (currentUser.HouseholdId is { } householdId)
+        {
+            await db.Database.ExecuteSqlAsync(
+                $"SELECT 1 FROM seasons WHERE id = {seasonId} AND household_id = {householdId} FOR UPDATE",
+                ct);
+        }
+
+        var status = await db.Seasons
+            .AsNoTracking()
+            .Where(s => s.Id == seasonId)
+            .Select(s => (SeasonStatus?)s.Status)
+            .FirstOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("công việc");
+
+        if (status != SeasonStatus.InProgress)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonInvalidState,
+                "Chỉ ghi được kết quả cho công việc thuộc mùa vụ đang canh tác.");
+        }
     }
 
     private static bool ComputeIsOverdue(FarmTaskStatus status, DateOnly scheduledDate, DateOnly today) =>
