@@ -3,6 +3,9 @@ import type { RouteHandle } from "@/app/route-handle";
 import { CustomerCreatePage } from "@/features/sales/pages/CustomerCreatePage";
 import { CustomerEditPage } from "@/features/sales/pages/CustomerEditPage";
 import { CustomerListPage } from "@/features/sales/pages/CustomerListPage";
+import { SaleCreatePage } from "@/features/sales/pages/SaleCreatePage";
+import { SaleDetailPage } from "@/features/sales/pages/SaleDetailPage";
+import { SaleListPage } from "@/features/sales/pages/SaleListPage";
 import { ACCESS } from "@/lib/auth/access";
 
 /**
@@ -10,6 +13,13 @@ import { ACCESS } from "@/lib/auth/access";
  * trang form ẩn thanh tab.
  */
 export const salesRoutes: RouteObject[] = [
+  { path: "/sales", element: <SaleListPage />, handle: { access: ACCESS.financeManager } satisfies RouteHandle },
+  {
+    path: "/sales/new",
+    element: <SaleCreatePage />,
+    handle: { access: ACCESS.financeManager, form: true } satisfies RouteHandle,
+  },
+  { path: "/sales/:id", element: <SaleDetailPage />, handle: { access: ACCESS.financeManager } satisfies RouteHandle },
   { path: "/customers", element: <CustomerListPage />, handle: { access: ACCESS.financeManager } satisfies RouteHandle },
   {
     path: "/customers/new",

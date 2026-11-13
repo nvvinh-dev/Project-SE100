@@ -96,6 +96,7 @@ builder.Services.AddScoped<StockOperations>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<ISaleService, SaleService>();
 
 var app = builder.Build();
 

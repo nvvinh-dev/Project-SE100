@@ -1,8 +1,13 @@
 import type {
   CreateCustomerRequest,
+  CreateSaleRequest,
   CustomerListItem,
   CustomerQuery,
   CustomerResponse,
+  ProduceStockResponse,
+  SaleListItem,
+  SaleQuery,
+  SaleResponse,
   UpdateCustomerRequest,
 } from "@/features/sales/types";
 import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
@@ -36,5 +41,25 @@ export async function createCustomer(request: CreateCustomerRequest): Promise<Cu
 
 export async function updateCustomer(id: string, request: UpdateCustomerRequest): Promise<CustomerResponse> {
   const response = await apiClient.put<ResponseEnvelope<CustomerResponse>>(`/customers/${id}`, request);
+  return response.data.data;
+}
+
+export function getSales(query: SaleQuery): Promise<Page<SaleListItem>> {
+  return getPage<SaleListItem>("/sales", query);
+}
+
+export async function getSale(id: string): Promise<SaleResponse> {
+  const response = await apiClient.get<ResponseEnvelope<SaleResponse>>(`/sales/${id}`);
+  return response.data.data;
+}
+
+export async function createSale(request: CreateSaleRequest): Promise<SaleResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SaleResponse>>("/sales", request);
+  return response.data.data;
+}
+
+/** Tồn nông sản của mùa vụ (API của module thu hoạch); trả mọi loại chất lượng, trang tự chọn loại cần. */
+export async function getProduceStock(seasonId: string): Promise<ProduceStockResponse[]> {
+  const response = await apiClient.get<ResponseEnvelope<ProduceStockResponse[]>>("/produce-stock", { params: { seasonId } });
   return response.data.data;
 }
