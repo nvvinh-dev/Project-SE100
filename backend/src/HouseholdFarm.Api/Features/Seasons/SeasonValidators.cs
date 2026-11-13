@@ -163,3 +163,42 @@ public sealed class UpdateSeasonNoteRequestValidator : AbstractValidator<UpdateS
     }
 }
 
+/// <summary>
+/// Kiểm tra định dạng yêu cầu khai báo vật tư dự kiến (FR-SEA-04).
+/// </summary>
+public sealed class CreateSeasonSupplyPlanRequestValidator : AbstractValidator<CreateSeasonSupplyPlanRequest>
+{
+    public CreateSeasonSupplyPlanRequestValidator()
+    {
+        RuleFor(r => r.SeasonId)
+            .NotEmpty().WithMessage("Vui lòng chọn mùa vụ.");
+
+        RuleFor(r => r.SupplyId)
+            .NotEmpty().WithMessage("Vui lòng chọn vật tư.");
+
+        RuleFor(r => r.PlannedQuantity)
+            .Cascade(CascadeMode.Stop)
+            .GreaterThan(0).WithMessage("Lượng dự kiến phải lớn hơn 0.")
+            .PrecisionScale(18, 3, ignoreTrailingZeros: true)
+            .WithMessage("Lượng dự kiến tối đa 3 chữ số sau dấu phẩy và 15 chữ số phần nguyên.");
+    }
+}
+
+/// <summary>
+/// Kiểm tra định dạng yêu cầu sửa lượng vật tư dự kiến (FR-SEA-04).
+/// </summary>
+public sealed class UpdateSeasonSupplyPlanRequestValidator : AbstractValidator<UpdateSeasonSupplyPlanRequest>
+{
+    public UpdateSeasonSupplyPlanRequestValidator()
+    {
+        RuleFor(r => r.PlannedQuantity)
+            .Cascade(CascadeMode.Stop)
+            .GreaterThan(0).WithMessage("Lượng dự kiến phải lớn hơn 0.")
+            .PrecisionScale(18, 3, ignoreTrailingZeros: true)
+            .WithMessage("Lượng dự kiến tối đa 3 chữ số sau dấu phẩy và 15 chữ số phần nguyên.");
+
+        RuleFor(r => r.Version)
+            .NotEmpty().WithMessage("Thiếu thông tin phiên bản dữ liệu.");
+    }
+}
+

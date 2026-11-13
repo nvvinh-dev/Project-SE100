@@ -3,6 +3,8 @@ import {
   assignSeason,
   createSeason,
   createSeasonNote,
+  createSeasonSupplyPlan,
+  deleteSeasonSupplyPlan,
   getActiveCrops,
   getHouseholdMembers,
   getSeason,
@@ -11,20 +13,24 @@ import {
   getSeasonNotes,
   getSeasonOptions,
   getSeasons,
+  getSeasonSupplyPlans,
   startSeason,
   unassignSeason,
   updateSeason,
   updateSeasonNote,
+  updateSeasonSupplyPlan,
 } from "@/features/seasons/api";
 import type {
   CreateSeasonAssignmentRequest,
   CreateSeasonNoteRequest,
   CreateSeasonRequest,
+  CreateSeasonSupplyPlanRequest,
   SeasonOptionQuery,
   SeasonQuery,
   UnassignSeasonAssignmentRequest,
   UpdateSeasonNoteRequest,
   UpdateSeasonRequest,
+  UpdateSeasonSupplyPlanRequest,
 } from "@/features/seasons/types";
 
 export const seasonKeys = {
@@ -35,6 +41,7 @@ export const seasonKeys = {
   detailFull: (id: string) => [...seasonKeys.all, "detailFull", id] as const,
   assignments: (seasonId: string) => [...seasonKeys.all, "assignments", seasonId] as const,
   notes: (seasonId: string) => [...seasonKeys.all, "notes", seasonId] as const,
+  supplyPlans: (seasonId: string) => [...seasonKeys.all, "supplyPlans", seasonId] as const,
   activeCrops: () => [...seasonKeys.all, "activeCrops"] as const,
   members: () => ["householdMembers"] as const,
 };
@@ -191,3 +198,47 @@ export function useHouseholdMembers() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Lấy danh sách vật tư dự kiến của mùa vụ (FR-SEA-04).
+export function useSeasonSupplyPlans(seasonId: string) {
+  return useQuery({
+    queryKey: seasonKeys.supplyPlans(seasonId),
+    queryFn: () => getSeasonSupplyPlans(seasonId),
+    enabled: Boolean(seasonId),
+  });
+}
+
+// Khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04).
+export function useCreateSeasonSupplyPlan(seasonId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: CreateSeasonSupplyPlanRequest) => createSeasonSupplyPlan(request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.supplyPlans(seasonId) });
+    },
+  });
+}
+
+// Cập nhật lượng vật tư dự kiến của mùa vụ (FR-SEA-04).
+export function useUpdateSeasonSupplyPlan(seasonId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: UpdateSeasonSupplyPlanRequest }) =>
+      updateSeasonSupplyPlan(id, request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.supplyPlans(seasonId) });
+    },
+  });
+}
+
+// Xóa một dòng vật tư dự kiến (FR-SEA-04).
+export function useDeleteSeasonSupplyPlan(seasonId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteSeasonSupplyPlan(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.supplyPlans(seasonId) });
+    },
+  });
+}
+

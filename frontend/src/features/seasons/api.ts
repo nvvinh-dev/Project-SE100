@@ -2,6 +2,7 @@ import type {
   CreateSeasonAssignmentRequest,
   CreateSeasonNoteRequest,
   CreateSeasonRequest,
+  CreateSeasonSupplyPlanRequest,
   CropOptionItem,
   HouseholdMemberOption,
   SeasonAssignmentItem,
@@ -12,11 +13,13 @@ import type {
   SeasonOptionQuery,
   SeasonQuery,
   SeasonResponse,
+  SeasonSupplyPlanResponse,
   UnassignSeasonAssignmentRequest,
   UpdateSeasonNoteRequest,
   UpdateSeasonRequest,
+  UpdateSeasonSupplyPlanRequest,
 } from "@/features/seasons/types";
-import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
+import { apiClient, type PageMeta, type ResponseEnvelope, type ResponseWarning } from "@/lib/api-client";
 
 // Một trang của danh sách: items là data, thông tin trang ở meta.
 export interface SeasonPage {
@@ -130,3 +133,38 @@ export async function getActiveCrops(): Promise<CropOptionItem[]> {
   });
   return response.data.data;
 }
+
+// Lấy danh sách vật tư dự kiến của mùa vụ (FR-SEA-04).
+export async function getSeasonSupplyPlans(seasonId: string): Promise<SeasonSupplyPlanResponse[]> {
+  const response = await apiClient.get<ResponseEnvelope<SeasonSupplyPlanResponse[]>>("/season-supply-plans", {
+    params: { seasonId },
+  });
+  return response.data.data;
+}
+
+/** Kết quả khai báo/cập nhật vật tư dự kiến: `warnings` chứa cảnh báo thiếu tồn/dưới ngưỡng (BR-SEA-09). */
+export interface SeasonSupplyPlanResult {
+  plan: SeasonSupplyPlanResponse;
+  warnings: ResponseWarning[];
+}
+
+// Khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04, BR-SEA-09).
+export async function createSeasonSupplyPlan(data: CreateSeasonSupplyPlanRequest): Promise<SeasonSupplyPlanResult> {
+  const response = await apiClient.post<ResponseEnvelope<SeasonSupplyPlanResponse>>("/season-supply-plans", data);
+  return { plan: response.data.data, warnings: response.data.warnings ?? [] };
+}
+
+// Cập nhật lượng vật tư dự kiến của mùa vụ (FR-SEA-04, BR-SEA-09).
+export async function updateSeasonSupplyPlan(
+  id: string,
+  data: UpdateSeasonSupplyPlanRequest,
+): Promise<SeasonSupplyPlanResult> {
+  const response = await apiClient.put<ResponseEnvelope<SeasonSupplyPlanResponse>>(`/season-supply-plans/${id}`, data);
+  return { plan: response.data.data, warnings: response.data.warnings ?? [] };
+}
+
+// Xóa một dòng vật tư dự kiến (FR-SEA-04).
+export async function deleteSeasonSupplyPlan(id: string): Promise<void> {
+  await apiClient.delete(`/season-supply-plans/${id}`);
+}
+

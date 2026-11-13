@@ -107,3 +107,78 @@ const formFields = [
 export function setSeasonFieldErrors(error: unknown, setError: UseFormSetError<SeasonFormValues>): boolean {
   return setFieldErrors(error, setError, formFields);
 }
+
+// Cột numeric(18,3): tối đa 15 chữ số phần nguyên, 3 chữ số sau dấu phẩy (BR-SEA-09).
+const QUANTITY_PATTERN = /^\d{1,15}(?:[.,]\d{1,3})?$/;
+
+/** Form khai báo vật tư dự kiến cho mùa vụ (FR-SEA-04, BR-SEA-09). */
+export function seasonSupplyPlanSchema() {
+  return z.object({
+    supplyId: z.string().trim().min(1, { error: "Vui lòng chọn vật tư." }),
+    plannedQuantity: z
+      .string()
+      .trim()
+      .min(1, { error: "Vui lòng nhập lượng dự kiến.", abort: true })
+      .refine((text) => parseDecimalInput(text) !== null, {
+        error: "Lượng dự kiến phải là số, ví dụ 50 hoặc 50,5.",
+        abort: true,
+      })
+      .refine((text) => (parseDecimalInput(text) ?? 0) > 0, {
+        error: "Lượng dự kiến phải lớn hơn 0.",
+        abort: true,
+      })
+      .refine((text) => QUANTITY_PATTERN.test(text), {
+        error: "Lượng dự kiến tối đa 3 chữ số sau dấu phẩy và 15 chữ số phần nguyên.",
+      }),
+  });
+}
+
+export type SeasonSupplyPlanFormValues = z.input<ReturnType<typeof seasonSupplyPlanSchema>>;
+export type SeasonSupplyPlanFormOutput = z.output<ReturnType<typeof seasonSupplyPlanSchema>>;
+
+/** Form điều chỉnh lượng vật tư dự kiến của mùa vụ (FR-SEA-04). */
+export function editSeasonSupplyPlanSchema() {
+  return z.object({
+    plannedQuantity: z
+      .string()
+      .trim()
+      .min(1, { error: "Vui lòng nhập lượng dự kiến.", abort: true })
+      .refine((text) => parseDecimalInput(text) !== null, {
+        error: "Lượng dự kiến phải là số, ví dụ 50 hoặc 50,5.",
+        abort: true,
+      })
+      .refine((text) => (parseDecimalInput(text) ?? 0) > 0, {
+        error: "Lượng dự kiến phải lớn hơn 0.",
+        abort: true,
+      })
+      .refine((text) => QUANTITY_PATTERN.test(text), {
+        error: "Lượng dự kiến tối đa 3 chữ số sau dấu phẩy và 15 chữ số phần nguyên.",
+      }),
+  });
+}
+
+export type EditSeasonSupplyPlanFormValues = z.input<ReturnType<typeof editSeasonSupplyPlanSchema>>;
+export type EditSeasonSupplyPlanFormOutput = z.output<ReturnType<typeof editSeasonSupplyPlanSchema>>;
+
+const supplyPlanFields = [
+  "supplyId",
+  "plannedQuantity",
+] as const satisfies readonly (keyof SeasonSupplyPlanFormValues)[];
+
+export function setSupplyPlanFieldErrors(
+  error: unknown,
+  setError: UseFormSetError<SeasonSupplyPlanFormValues>,
+): boolean {
+  return setFieldErrors(error, setError, supplyPlanFields);
+}
+
+const editSupplyPlanFields = [
+  "plannedQuantity",
+] as const satisfies readonly (keyof EditSeasonSupplyPlanFormValues)[];
+
+export function setEditSupplyPlanFieldErrors(
+  error: unknown,
+  setError: UseFormSetError<EditSeasonSupplyPlanFormValues>,
+): boolean {
+  return setFieldErrors(error, setError, editSupplyPlanFields);
+}
