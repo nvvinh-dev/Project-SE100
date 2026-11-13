@@ -112,3 +112,54 @@ public sealed class SeasonOptionQueryValidator : AbstractValidator<SeasonOptionQ
     }
 }
 
+/// <summary>
+/// Kiểm tra định dạng yêu cầu phân công người vào mùa vụ (FR-SEA-06).
+/// </summary>
+public sealed class CreateSeasonAssignmentRequestValidator : AbstractValidator<CreateSeasonAssignmentRequest>
+{
+    public CreateSeasonAssignmentRequestValidator()
+    {
+        RuleFor(r => r.SeasonId)
+            .NotEmpty().WithMessage("Vui lòng chọn mùa vụ.");
+
+        RuleFor(r => r.UserId)
+            .NotEmpty().WithMessage("Vui lòng chọn người được phân công.");
+    }
+}
+
+/// <summary>
+/// Kiểm tra định dạng yêu cầu tạo ghi chú kinh nghiệm (FR-SEA-13, BR-SEA-11).
+/// </summary>
+public sealed class CreateSeasonNoteRequestValidator : AbstractValidator<CreateSeasonNoteRequest>
+{
+    public CreateSeasonNoteRequestValidator()
+    {
+        RuleFor(r => r.SeasonId)
+            .NotEmpty().WithMessage("Vui lòng chọn mùa vụ.");
+
+        RuleFor(r => r.Content)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Vui lòng nhập nội dung ghi chú.")
+            .Must(c => !string.IsNullOrWhiteSpace(c)).WithMessage("Nội dung ghi chú không được chỉ chứa khoảng trắng.")
+            .MaximumLength(2000).WithMessage("Nội dung ghi chú tối đa 2000 ký tự.");
+    }
+}
+
+/// <summary>
+/// Kiểm tra định dạng yêu cầu sửa ghi chú kinh nghiệm (FR-SEA-13, BR-SEA-11).
+/// </summary>
+public sealed class UpdateSeasonNoteRequestValidator : AbstractValidator<UpdateSeasonNoteRequest>
+{
+    public UpdateSeasonNoteRequestValidator()
+    {
+        RuleFor(r => r.Content)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Vui lòng nhập nội dung ghi chú.")
+            .Must(c => !string.IsNullOrWhiteSpace(c)).WithMessage("Nội dung ghi chú không được chỉ chứa khoảng trắng.")
+            .MaximumLength(2000).WithMessage("Nội dung ghi chú tối đa 2000 ký tự.");
+
+        RuleFor(r => r.Version)
+            .NotEmpty().WithMessage("Thiếu thông tin phiên bản dữ liệu.");
+    }
+}
+

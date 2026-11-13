@@ -1,15 +1,25 @@
+using HouseholdFarm.Api.Common.Auditing;
 using HouseholdFarm.Api.Common.Auth;
 using HouseholdFarm.Api.Common.Errors;
 using HouseholdFarm.Api.Common.Persistence;
 using HouseholdFarm.Api.Common.Responses;
+using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
+using HouseholdFarm.Api.Features.Harvests;
+using HouseholdFarm.Api.Features.Reports.Finance;
 using Microsoft.EntityFrameworkCore;
 
 namespace HouseholdFarm.Api.Features.Seasons;
 
-public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : ISeasonService
+public sealed class SeasonService(
+    AppDbContext db,
+    ICurrentUser currentUser,
+    IAppClock clock,
+    IAuditLogger audit,
+    IProduceStockService produceStockService,
+    ISeasonFinanceService seasonFinanceService) : ISeasonService
 {
     public async Task<PagedResult<SeasonListItem>> GetListAsync(SeasonQuery query, CancellationToken ct)
     {
@@ -414,6 +424,230 @@ public sealed class SeasonService(AppDbContext db, ICurrentUser currentUser) : I
                 });
         }
     }
+
+    public async Task<SeasonDetailResponse> GetDetailAsync(Guid id, CancellationToken ct)
+    {
+        // Ma trận phân quyền: Nhân công không được xem chi tiết mùa vụ (BR-GEN-02)
+        if (currentUser.Role == UserRole.Worker)
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
+
+        var isOwner = currentUser.Role == UserRole.Owner;
+        var isInScope = isOwner || currentUser.AssignedSeasonIds.Contains(id);
+        var hasFinanceScope = !isInScope && currentUser.CanManageFinance;
+        var hasStockScope = !isInScope && currentUser.CanManageStock;
+
+        // BR-GEN-02, BR-USR-13: Ngoài phạm vi và không có quyền Kho/TC thì báo không tìm thấy
+        if (!isInScope && !hasFinanceScope && !hasStockScope)
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
+
+        var season = await db.Seasons
+            .AsNoTracking()
+            .Include(s => s.Plot)
+            .Include(s => s.Crop)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw AppException.NotFound("mùa vụ");
+
+        var isOutOfScope = !isInScope;
+        decimal harvestedYield = 0m;
+        var completedTasksCount = 0;
+        var totalTasksCount = 0;
+        IReadOnlyList<ProduceStockSummaryItem> produceStocks = [];
+        SeasonFinancialSummary? financialSummary = null;
+        IReadOnlyList<SeasonAssignmentResponse> assignments = [];
+
+        if (!isOutOfScope)
+        {
+            // Danh sách người được phân công (FR-SEA-06)
+            assignments = await db.SeasonAssignments
+                .AsNoTracking()
+                .Where(a => a.SeasonId == id)
+                .OrderBy(a => a.CreatedAt)
+                .Select(a => new SeasonAssignmentResponse(
+                    a.Id,
+                    a.SeasonId,
+                    a.UserId,
+                    a.User.FullName,
+                    a.User.Role,
+                    a.User.PhoneNumber ?? string.Empty,
+                    a.CreatedAt))
+                .ToListAsync(ct);
+
+            // Tiến độ công việc (không tính công việc Đã hủy)
+            var tasksQuery = db.FarmTasks
+                .AsNoTracking()
+                .Where(t => t.SeasonId == id && t.Status != FarmTaskStatus.Cancelled);
+            totalTasksCount = await tasksQuery.CountAsync(ct);
+            completedTasksCount = await tasksQuery.CountAsync(t => t.Status == FarmTaskStatus.Done, ct);
+        }
+
+        // BR-USR-13: Tồn nông sản và sản lượng thu hoạch chỉ hiển thị cho người trong phạm vi hoặc có ManageFinance
+        if (!isOutOfScope || hasFinanceScope)
+        {
+            harvestedYield = await db.HarvestRecords
+                .AsNoTracking()
+                .Where(h => h.SeasonId == id && h.VoidedAt == null)
+                .SumAsync(h => (decimal?)h.Quantity, ct) ?? 0m;
+
+            try
+            {
+                var stocks = await produceStockService.GetStockAsync(id, ct);
+                produceStocks = stocks.Select(p => new ProduceStockSummaryItem(
+                    p.QualityGrade,
+                    p.Quantity,
+                    season.Crop.YieldUnit)).ToList();
+            }
+            catch (NotImplementedException)
+            {
+                produceStocks = [
+                    new(QualityGrade.Grade1, 0, season.Crop.YieldUnit),
+                    new(QualityGrade.Grade2, 0, season.Crop.YieldUnit),
+                    new(QualityGrade.Grade3, 0, season.Crop.YieldUnit),
+                ];
+            }
+        }
+
+        // BR-USR-13: Tóm tắt tài chính dành cho Chủ hộ hoặc người có quyền ManageFinance (không tự tính, lấy qua ISeasonFinanceService)
+        if (isOwner || currentUser.CanManageFinance)
+        {
+            try
+            {
+                var financeSummaries = await seasonFinanceService.GetAsync([id], ct);
+                var finance = financeSummaries.FirstOrDefault(f => f.SeasonId == id);
+                if (finance is not null)
+                {
+                    financialSummary = new SeasonFinancialSummary(
+                        finance.SupplyCost + finance.ExpenseAmount,
+                        finance.Revenue,
+                        finance.Profit);
+                }
+            }
+            catch (NotImplementedException)
+            {
+                // Khi RPT-FIN chưa hiện thực thì giữ financialSummary = null
+            }
+        }
+
+        var targetYield = isOutOfScope && !hasFinanceScope ? 0m : season.TargetYield;
+        var startedAt = isOutOfScope ? null : season.StartedAt;
+        var closedAt = isOutOfScope ? null : season.ClosedAt;
+        var cancelledAt = isOutOfScope ? null : season.CancelledAt;
+        var cancelReason = isOutOfScope ? null : season.CancelReason;
+
+        var canEdit = !isOutOfScope && isOwner && season.Status is SeasonStatus.Planned or SeasonStatus.InProgress;
+        var canStart = !isOutOfScope && isOwner && season.Status == SeasonStatus.Planned;
+        var canClose = !isOutOfScope && (isOwner || currentUser.CanCloseSeason) && season.Status == SeasonStatus.InProgress;
+        var canCancel = !isOutOfScope && isOwner && season.Status is SeasonStatus.Planned or SeasonStatus.InProgress;
+        var canReopen = !isOutOfScope && isOwner && season.Status == SeasonStatus.Closed;
+
+        return new SeasonDetailResponse(
+            season.Id,
+            season.PlotId,
+            season.Plot.Code,
+            season.CropId,
+            season.Crop.Name,
+            season.Crop.YieldUnit,
+            season.StartDate,
+            season.ExpectedHarvestDate,
+            targetYield,
+            season.Status,
+            startedAt,
+            closedAt,
+            cancelledAt,
+            cancelReason,
+            season.Version,
+            harvestedYield,
+            completedTasksCount,
+            totalTasksCount,
+            produceStocks,
+            financialSummary,
+            assignments,
+            isOutOfScope,
+            canEdit,
+            canStart,
+            canClose,
+            canCancel,
+            canReopen);
+    }
+
+    public async Task<SeasonResponse> StartAsync(Guid id, CancellationToken ct)
+    {
+        // Ma trận phân quyền: chỉ Chủ hộ có quyền bắt đầu mùa vụ
+        currentUser.EnsureOwner();
+
+        if (currentUser.HouseholdId is null)
+        {
+            throw AppException.NotFound("hộ");
+        }
+
+        await using var tx = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        // BR-GEN-12: Khóa dòng seasons trước khi đọc dữ liệu kiểm tra
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT 1 FROM seasons WHERE id = {id} AND household_id = {currentUser.HouseholdId.Value} FOR UPDATE",
+            ct);
+
+        var season = await db.Seasons
+            .Include(s => s.Plot)
+            .Include(s => s.Crop)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw AppException.NotFound("mùa vụ");
+
+        if (season.Status != SeasonStatus.Planned)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonInvalidState,
+                $"Chỉ có thể bắt đầu mùa vụ đang ở trạng thái 'Lên kế hoạch' (hiện tại: '{FormatStatus(season.Status)}').");
+        }
+
+        // BR-SEA-03: Kiểm tra thửa đang bận Lớp 2
+        await EnsurePlotNotBusyAsync(season.PlotId, excludeSeasonId: season.Id, ct);
+
+        season.Status = SeasonStatus.InProgress;
+        season.StartedAt = clock.UtcNow;
+
+        // Ghi nhật ký kiểm toán (BR-GEN-07, BR-GEN-08)
+        audit.Log(
+            AuditActions.SeasonStart,
+            season.Id,
+            oldValues: new { status = SeasonStatus.Planned },
+            newValues: new { status = SeasonStatus.InProgress, startedAt = season.StartedAt },
+            reason: null);
+
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+        }
+
+        return new SeasonResponse(
+            season.Id,
+            season.Plot.Id,
+            season.Plot.Code,
+            season.Crop.Id,
+            season.Crop.Name,
+            season.Crop.YieldUnit,
+            season.StartDate,
+            season.ExpectedHarvestDate,
+            season.TargetYield,
+            season.Status,
+            season.Version);
+    }
+
+    private static string FormatStatus(SeasonStatus status) => status switch
+    {
+        SeasonStatus.Planned => "Lên kế hoạch",
+        SeasonStatus.InProgress => "Đang canh tác",
+        SeasonStatus.Closed => "Đã chốt",
+        SeasonStatus.Cancelled => "Đã hủy",
+        _ => status.ToString(),
+    };
 
     private async Task<bool> IsAllowOverlappingSeasonsAsync(CancellationToken ct)
     {

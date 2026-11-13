@@ -18,8 +18,8 @@ public sealed class SeasonsController(ISeasonService seasonService) : Controller
         Ok(await seasonService.GetOptionsAsync(query, ct));
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<SeasonResponse>> GetAsync(Guid id, CancellationToken ct) =>
-        Ok(await seasonService.GetAsync(id, ct));
+    public async Task<ActionResult<SeasonDetailResponse>> GetAsync(Guid id, CancellationToken ct) =>
+        Ok(await seasonService.GetDetailAsync(id, ct));
 
     [HttpPost]
     public async Task<ActionResult<SeasonResponse>> CreateAsync(CreateSeasonRequest request, CancellationToken ct)
@@ -31,5 +31,9 @@ public sealed class SeasonsController(ISeasonService seasonService) : Controller
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<SeasonResponse>> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct) =>
         Ok(await seasonService.UpdateAsync(id, request, ct));
+
+    [HttpPost("{id:guid}/start")]
+    public async Task<ActionResult<SeasonResponse>> StartAsync(Guid id, CancellationToken ct) =>
+        Ok(await seasonService.StartAsync(id, ct));
 }
 

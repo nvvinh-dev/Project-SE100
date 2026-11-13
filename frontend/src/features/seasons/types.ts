@@ -1,5 +1,5 @@
 import type { PageQuery } from "@/lib/api-client";
-import type { ExtraPermission, SeasonStatus, Unit } from "@/lib/enums";
+import type { ExtraPermission, QualityGrade, SeasonStatus, Unit, UserRole } from "@/lib/enums";
 
 // Loại thao tác mùa vụ theo quy tắc trạng thái (BR-SEA-10).
 export const seasonOperations = [
@@ -104,4 +104,105 @@ export interface SeasonOptionItem {
   yieldUnit: Unit;
   startDate: string;
   expectedHarvestDate: string;
+}
+
+// Tồn nông sản theo loại chất lượng của mùa vụ (FR-SEA-12).
+export interface ProduceStockSummaryItem {
+  grade: QualityGrade;
+  quantity: number;
+  unit: Unit;
+}
+
+// Tóm tắt tài chính của mùa vụ (FR-SEA-12, BR-USR-13).
+export interface SeasonFinancialSummary {
+  totalExpense: number;
+  totalRevenue: number;
+  estimatedProfit: number;
+}
+
+// Người được phân công vào mùa vụ (FR-SEA-06, FR-SEA-12).
+export interface SeasonAssignmentItem {
+  id: string;
+  seasonId: string;
+  userId: string;
+  fullName: string;
+  role: UserRole;
+  phoneNumber: string;
+  createdAt: string;
+}
+
+// Chi tiết mùa vụ đầy đủ (FR-SEA-12).
+export interface SeasonDetailResponse {
+  id: string;
+  plotId: string;
+  plotCode: string;
+  cropId: string;
+  cropName: string;
+  yieldUnit: Unit;
+  startDate: string;
+  expectedHarvestDate: string;
+  targetYield: number;
+  status: SeasonStatus;
+  startedAt?: string;
+  closedAt?: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+  version: number;
+  harvestedYield: number;
+  completedTasksCount: number;
+  totalTasksCount: number;
+  produceStocks: ProduceStockSummaryItem[];
+  financialSummary?: SeasonFinancialSummary;
+  assignments: SeasonAssignmentItem[];
+  isOutOfScope: boolean;
+  canEdit: boolean;
+  canStart: boolean;
+  canClose: boolean;
+  canCancel: boolean;
+  canReopen: boolean;
+}
+
+// Yêu cầu phân công người vào mùa vụ (FR-SEA-06).
+export interface CreateSeasonAssignmentRequest {
+  seasonId: string;
+  userId: string;
+}
+
+// Yêu cầu thu hồi phân công (FR-SEA-06, BR-USR-12, BR-GEN-14).
+export interface UnassignSeasonAssignmentRequest {
+  confirmed?: boolean;
+}
+
+// Ghi chú kinh nghiệm mùa vụ (FR-SEA-13).
+export interface SeasonNoteResponse {
+  id: string;
+  seasonId: string;
+  content: string;
+  createdById: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt?: string;
+  version: number;
+  canEdit: boolean;
+}
+
+// Yêu cầu tạo ghi chú kinh nghiệm (FR-SEA-13, BR-SEA-11).
+export interface CreateSeasonNoteRequest {
+  seasonId: string;
+  content: string;
+}
+
+// Yêu cầu sửa ghi chú kinh nghiệm (FR-SEA-13, BR-SEA-11).
+export interface UpdateSeasonNoteRequest {
+  content: string;
+  version: number;
+}
+
+// Thành viên hộ để chọn phân công.
+export interface HouseholdMemberOption {
+  id: string;
+  fullName: string;
+  role: UserRole;
+  phoneNumber?: string;
+  isLocked?: boolean;
 }
