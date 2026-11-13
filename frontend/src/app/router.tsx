@@ -9,6 +9,7 @@ import { accountRoutes, authRoutes } from "@/features/auth/routes";
 import { expenseRoutes } from "@/features/expenses/routes";
 import { cropRoutes } from "@/features/crops/routes";
 import { plotRoutes } from "@/features/plots/routes";
+import { salesRoutes } from "@/features/sales/routes";
 import { seasonRoutes } from "@/features/seasons/routes";
 import { supplyRoutes } from "@/features/supplies/routes";
 import { ACCESS, canAccess } from "@/lib/auth/access";
@@ -38,6 +39,7 @@ const routes: RouteObject[] = [
           ...seasonRoutes,
           ...supplyRoutes,
           ...expenseRoutes,
+          ...salesRoutes,
           { path: "*", element: <NotFoundPage /> },
         ],
       },
