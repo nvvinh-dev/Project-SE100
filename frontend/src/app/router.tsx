@@ -7,6 +7,7 @@ import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
 import { accountRoutes, authRoutes } from "@/features/auth/routes";
 import { expenseRoutes } from "@/features/expenses/routes";
+import { householdRoutes } from "@/features/households/routes";
 import { cropRoutes } from "@/features/crops/routes";
 import { plotRoutes } from "@/features/plots/routes";
 import { salesRoutes } from "@/features/sales/routes";
@@ -36,6 +37,7 @@ const routes: RouteObject[] = [
           ...accountRoutes,
           ...plotRoutes,
           ...cropRoutes,
+          ...householdRoutes,
           ...seasonRoutes,
           ...supplyRoutes,
           ...expenseRoutes,
