@@ -202,3 +202,33 @@ public sealed class UpdateSeasonSupplyPlanRequestValidator : AbstractValidator<U
     }
 }
 
+/// <summary>
+/// Kiểm tra định dạng yêu cầu hủy mùa vụ (FR-SEA-10, BR-GEN-06).
+/// </summary>
+public sealed class CancelSeasonRequestValidator : AbstractValidator<CancelSeasonRequest>
+{
+    public CancelSeasonRequestValidator()
+    {
+        RuleFor(r => r.Reason)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Vui lòng nhập lý do hủy mùa vụ.")
+            .Must(r => !string.IsNullOrWhiteSpace(r)).WithMessage("Lý do hủy không được chỉ chứa khoảng trắng.")
+            .MaximumLength(1000).WithMessage("Lý do hủy tối đa 1000 ký tự.");
+    }
+}
+
+/// <summary>
+/// Kiểm tra định dạng yêu cầu mở lại mùa vụ (FR-SEA-14, BR-GEN-06).
+/// </summary>
+public sealed class ReopenSeasonRequestValidator : AbstractValidator<ReopenSeasonRequest>
+{
+    public ReopenSeasonRequestValidator()
+    {
+        RuleFor(r => r.Reason)
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Vui lòng nhập lý do mở lại mùa vụ.")
+            .Must(r => !string.IsNullOrWhiteSpace(r)).WithMessage("Lý do mở lại không được chỉ chứa khoảng trắng.")
+            .MaximumLength(1000).WithMessage("Lý do mở lại tối đa 1000 ký tự.");
+    }
+}
+

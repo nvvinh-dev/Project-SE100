@@ -500,7 +500,7 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var user = TestCurrentUser.For(household.Owner);
         var clock = TestClock.At(DateTimeOffset.UtcNow);
         var audit = new DummyAuditLogger();
-        var produceStock = new ProduceStockService();
+        var produceStock = new ProduceStockService(db);
         var finance = new SeasonFinanceService();
         var seasonService = new SeasonService(db, user, clock, audit, produceStock, finance);
 

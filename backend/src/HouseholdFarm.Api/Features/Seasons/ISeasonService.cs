@@ -25,6 +25,21 @@ public interface ISeasonService
     Task<SeasonResponse> StartAsync(Guid id, CancellationToken ct);
 
     /// <summary>
+    /// Chốt mùa vụ: chuyển từ InProgress sang Closed, kiểm tra hết tồn nông sản và hủy việc chưa làm (FR-SEA-09, BR-SEA-05, BR-GEN-14).
+    /// </summary>
+    Task<SeasonResponse> CloseAsync(Guid id, CloseSeasonRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Hủy mùa vụ: chuyển từ Planned/InProgress sang Cancelled, kiểm tra chưa thu hoạch/bán và hủy việc chưa làm (FR-SEA-10, BR-SEA-06, BR-GEN-14).
+    /// </summary>
+    Task<SeasonResponse> CancelAsync(Guid id, CancelSeasonRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Mở lại mùa vụ đã chốt: chuyển từ Closed sang InProgress, kiểm tra thửa bận Lớp 2 (FR-SEA-14, BR-SEA-08, BR-GEN-12).
+    /// </summary>
+    Task<SeasonResponse> ReopenAsync(Guid id, ReopenSeasonRequest request, CancellationToken ct);
+
+    /// <summary>
     /// Kiểm tra chồng lấn kế hoạch Lớp 1 (BR-SEA-02): so khoảng ngày với các mùa vụ Planned/InProgress trên cùng thửa.
     /// Bỏ qua khi hộ bật AllowOverlappingSeasons (BR-SEA-04).
     /// </summary>

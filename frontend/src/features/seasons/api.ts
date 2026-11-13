@@ -1,10 +1,13 @@
 import type {
+  CancelSeasonRequest,
+  CloseSeasonRequest,
   CreateSeasonAssignmentRequest,
   CreateSeasonNoteRequest,
   CreateSeasonRequest,
   CreateSeasonSupplyPlanRequest,
   CropOptionItem,
   HouseholdMemberOption,
+  ReopenSeasonRequest,
   SeasonAssignmentItem,
   SeasonDetailResponse,
   SeasonListItem,
@@ -71,6 +74,24 @@ export async function getSeasonDetail(id: string): Promise<SeasonDetailResponse>
 // Bắt đầu mùa vụ (FR-SEA-08).
 export async function startSeason(id: string): Promise<SeasonResponse> {
   const response = await apiClient.post<ResponseEnvelope<SeasonResponse>>(`/seasons/${id}/start`);
+  return response.data.data;
+}
+
+// Chốt mùa vụ (FR-SEA-09, BR-SEA-05, BR-GEN-14).
+export async function closeSeason(id: string, request?: CloseSeasonRequest): Promise<SeasonResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SeasonResponse>>(`/seasons/${id}/close`, request ?? {});
+  return response.data.data;
+}
+
+// Hủy mùa vụ (FR-SEA-10, BR-SEA-06, BR-GEN-06, BR-GEN-14).
+export async function cancelSeason(id: string, request: CancelSeasonRequest): Promise<SeasonResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SeasonResponse>>(`/seasons/${id}/cancel`, request);
+  return response.data.data;
+}
+
+// Mở lại mùa vụ đã chốt (FR-SEA-14, BR-SEA-08, BR-GEN-06).
+export async function reopenSeason(id: string, request: ReopenSeasonRequest): Promise<SeasonResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SeasonResponse>>(`/seasons/${id}/reopen`, request);
   return response.data.data;
 }
 

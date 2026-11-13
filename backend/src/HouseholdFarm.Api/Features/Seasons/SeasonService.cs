@@ -187,18 +187,9 @@ public sealed class SeasonService(
         db.Seasons.Add(season);
         await db.SaveChangesAsync(ct);
 
-        return new SeasonResponse(
-            season.Id,
-            plot.Id,
-            plot.Code,
-            crop.Id,
-            crop.Name,
-            crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        season.Plot = plot;
+        season.Crop = crop;
+        return MapToResponse(season);
     }
 
     public async Task<SeasonResponse> UpdateAsync(Guid id, UpdateSeasonRequest request, CancellationToken ct)
@@ -259,18 +250,7 @@ public sealed class SeasonService(
 
         await db.SaveChangesAsync(ct);
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
 
     private async Task<Plot> EnsurePlotActiveAsync(Guid plotId, CancellationToken ct)
@@ -626,19 +606,281 @@ public sealed class SeasonService(
             await tx.CommitAsync(ct);
         }
 
-        return new SeasonResponse(
-            season.Id,
-            season.Plot.Id,
-            season.Plot.Code,
-            season.Crop.Id,
-            season.Crop.Name,
-            season.Crop.YieldUnit,
-            season.StartDate,
-            season.ExpectedHarvestDate,
-            season.TargetYield,
-            season.Status,
-            season.Version);
+        return MapToResponse(season);
     }
+
+    public async Task<SeasonResponse> CloseAsync(Guid id, CloseSeasonRequest request, CancellationToken ct)
+    {
+        // BR-GEN-02: Kiểm tra phạm vi trước để không lộ sự tồn tại của mùa vụ
+        var isOwner = currentUser.Role == UserRole.Owner;
+        if (!isOwner && !currentUser.AssignedSeasonIds.Contains(id))
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
+
+        // Phân quyền: Chủ hộ HOẶC Thành viên có CanCloseSeason trong phân công (FR-SEA-09, BR-USR-13)
+        var hasPermission = isOwner || (currentUser.Role == UserRole.Member && currentUser.CanCloseSeason);
+        if (!hasPermission)
+        {
+            throw new AppException(ErrorCodes.Forbidden, "Bạn không có quyền chốt mùa vụ này.");
+        }
+
+        if (!currentUser.HouseholdId.HasValue)
+        {
+            throw AppException.NotFound("hộ");
+        }
+
+        await using var tx = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        // BR-GEN-12: Khóa dòng seasons trước khi đọc dữ liệu kiểm tra
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT 1 FROM seasons WHERE id = {id} AND household_id = {currentUser.HouseholdId.Value} FOR UPDATE",
+            ct);
+
+        var season = await db.Seasons
+            .Include(s => s.Plot)
+            .Include(s => s.Crop)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw AppException.NotFound("mùa vụ");
+
+        if (season.Status != SeasonStatus.InProgress)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonInvalidState,
+                $"Chỉ có thể chốt mùa vụ đang ở trạng thái 'Đang canh tác' (hiện tại: '{FormatStatus(season.Status)}').");
+        }
+
+        // BR-SEA-05: Kiểm tra tồn nông sản mọi loại chất lượng bằng 0 qua IProduceStockService
+        await produceStockService.EnsureZeroStockAsync(season.Id, ct);
+
+        // BR-GEN-14, BR-SEA-05: Kiểm tra công việc chưa thực hiện
+        var unfinishedTasks = await db.FarmTasks
+            .Where(t => t.SeasonId == season.Id && (t.Status == FarmTaskStatus.Pending || t.Status == FarmTaskStatus.WaitingForSupply))
+            .OrderBy(t => t.ScheduledDate)
+            .ToListAsync(ct);
+
+        if (unfinishedTasks.Count > 0 && request.Confirmed != true)
+        {
+            var items = unfinishedTasks.Select(t => new
+            {
+                id = t.Id,
+                label = $"{FormatTaskType(t.Type, t.TypeOther)} · {t.ScheduledDate:dd/MM/yyyy}",
+            }).ToList();
+
+            throw new AppException(
+                ErrorCodes.ConfirmationRequired,
+                $"Còn {unfinishedTasks.Count} công việc chưa thực hiện trong mùa vụ. Các công việc này sẽ tự động chuyển sang Đã hủy khi chốt mùa vụ.",
+                new { items });
+        }
+
+        var now = clock.UtcNow;
+
+        // Hủy các việc chưa làm sau khi xác nhận
+        foreach (var task in unfinishedTasks)
+        {
+            task.Status = FarmTaskStatus.Cancelled;
+            task.CancelledAt = now;
+        }
+
+        season.Status = SeasonStatus.Closed;
+        season.ClosedAt = now;
+        season.ClosedById = currentUser.UserId;
+
+        audit.Log(
+            AuditActions.SeasonClose,
+            season.Id,
+            oldValues: new { status = SeasonStatus.InProgress },
+            newValues: new { status = SeasonStatus.Closed, closedAt = season.ClosedAt, closedById = season.ClosedById },
+            reason: null);
+
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+        }
+
+        return MapToResponse(season);
+    }
+
+    public async Task<SeasonResponse> CancelAsync(Guid id, CancelSeasonRequest request, CancellationToken ct)
+    {
+        // Quyền: chỉ Chủ hộ (FR-SEA-10)
+        currentUser.EnsureOwner();
+
+        if (!currentUser.HouseholdId.HasValue)
+        {
+            throw AppException.NotFound("hộ");
+        }
+
+        await using var tx = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        // BR-GEN-12: Khóa dòng seasons trước khi đọc dữ liệu kiểm tra
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT 1 FROM seasons WHERE id = {id} AND household_id = {currentUser.HouseholdId.Value} FOR UPDATE",
+            ct);
+
+        var season = await db.Seasons
+            .Include(s => s.Plot)
+            .Include(s => s.Crop)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw AppException.NotFound("mùa vụ");
+
+        // BR-SEA-10: Chỉ từ Planned hoặc InProgress
+        if (season.Status is not (SeasonStatus.Planned or SeasonStatus.InProgress))
+        {
+            throw new AppException(
+                ErrorCodes.SeasonInvalidState,
+                $"Chỉ có thể hủy mùa vụ đang ở trạng thái 'Lên kế hoạch' hoặc 'Đang canh tác' (hiện tại: '{FormatStatus(season.Status)}').");
+        }
+
+        // BR-SEA-06: Chưa có phiếu thu hoạch hoặc giao dịch bán chưa Void
+        var hasHarvest = await db.HarvestRecords.AnyAsync(h => h.SeasonId == id && h.VoidedAt == null, ct);
+        var hasSale = await db.Sales.AnyAsync(s => s.SeasonId == id && s.VoidedAt == null, ct);
+        if (hasHarvest || hasSale)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonHasHarvest,
+                "Không thể hủy mùa vụ vì đã có phiếu thu hoạch hoặc giao dịch bán.");
+        }
+
+        // BR-GEN-14: Kiểm tra công việc chưa thực hiện
+        var unfinishedTasks = await db.FarmTasks
+            .Where(t => t.SeasonId == season.Id && (t.Status == FarmTaskStatus.Pending || t.Status == FarmTaskStatus.WaitingForSupply))
+            .OrderBy(t => t.ScheduledDate)
+            .ToListAsync(ct);
+
+        if (unfinishedTasks.Count > 0 && request.Confirmed != true)
+        {
+            var items = unfinishedTasks.Select(t => new
+            {
+                id = t.Id,
+                label = $"{FormatTaskType(t.Type, t.TypeOther)} · {t.ScheduledDate:dd/MM/yyyy}",
+            }).ToList();
+
+            throw new AppException(
+                ErrorCodes.ConfirmationRequired,
+                $"Còn {unfinishedTasks.Count} công việc chưa thực hiện trong mùa vụ. Các công việc này sẽ tự động chuyển sang Đã hủy khi hủy mùa vụ.",
+                new { items });
+        }
+
+        var now = clock.UtcNow;
+        var oldStatus = season.Status;
+
+        foreach (var task in unfinishedTasks)
+        {
+            task.Status = FarmTaskStatus.Cancelled;
+            task.CancelledAt = now;
+        }
+
+        season.Status = SeasonStatus.Cancelled;
+        season.CancelledAt = now;
+        season.CancelledById = currentUser.UserId;
+        season.CancelReason = request.Reason.Trim();
+
+        audit.Log(
+            AuditActions.SeasonCancel,
+            season.Id,
+            oldValues: new { status = oldStatus },
+            newValues: new { status = SeasonStatus.Cancelled, cancelledAt = season.CancelledAt, cancelReason = season.CancelReason },
+            reason: request.Reason.Trim());
+
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+        }
+
+        return MapToResponse(season);
+    }
+
+    public async Task<SeasonResponse> ReopenAsync(Guid id, ReopenSeasonRequest request, CancellationToken ct)
+    {
+        // Quyền: chỉ Chủ hộ (FR-SEA-14)
+        currentUser.EnsureOwner();
+
+        if (!currentUser.HouseholdId.HasValue)
+        {
+            throw AppException.NotFound("hộ");
+        }
+
+        await using var tx = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct)
+            : null;
+
+        // BR-GEN-12: Khóa dòng seasons trước khi đọc dữ liệu kiểm tra
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT 1 FROM seasons WHERE id = {id} AND household_id = {currentUser.HouseholdId.Value} FOR UPDATE",
+            ct);
+
+        var season = await db.Seasons
+            .Include(s => s.Plot)
+            .Include(s => s.Crop)
+            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw AppException.NotFound("mùa vụ");
+
+        // BR-SEA-10: Chỉ từ Closed
+        if (season.Status != SeasonStatus.Closed)
+        {
+            throw new AppException(
+                ErrorCodes.SeasonInvalidState,
+                $"Chỉ có thể mở lại mùa vụ đã chốt (hiện tại: '{FormatStatus(season.Status)}').");
+        }
+
+        // BR-SEA-08: Kiểm tra lớp 2 (thửa bận)
+        await EnsurePlotNotBusyAsync(season.PlotId, excludeSeasonId: season.Id, ct);
+
+        season.Status = SeasonStatus.InProgress;
+        season.ClosedAt = null;
+        season.ClosedById = null;
+
+        audit.Log(
+            AuditActions.SeasonReopen,
+            season.Id,
+            oldValues: new { status = SeasonStatus.Closed },
+            newValues: new { status = SeasonStatus.InProgress },
+            reason: request.Reason.Trim());
+
+        await db.SaveChangesAsync(ct);
+
+        if (tx is not null)
+        {
+            await tx.CommitAsync(ct);
+        }
+
+        return MapToResponse(season);
+    }
+
+    private static SeasonResponse MapToResponse(Season season) => new(
+        season.Id,
+        season.Plot.Id,
+        season.Plot.Code,
+        season.Crop.Id,
+        season.Crop.Name,
+        season.Crop.YieldUnit,
+        season.StartDate,
+        season.ExpectedHarvestDate,
+        season.TargetYield,
+        season.Status,
+        season.Version);
+
+    private static string FormatTaskType(FarmTaskType type, string? typeOther) => type switch
+    {
+        FarmTaskType.LandPreparation => "Làm đất",
+        FarmTaskType.Sowing => "Gieo trồng",
+        FarmTaskType.Watering => "Tưới nước",
+        FarmTaskType.Fertilizing => "Bón phân",
+        FarmTaskType.Weeding => "Làm cỏ",
+        FarmTaskType.PestInspection => "Kiểm tra sâu bệnh",
+        FarmTaskType.Spraying => "Phun thuốc",
+        FarmTaskType.Other => string.IsNullOrWhiteSpace(typeOther) ? "Khác" : typeOther,
+        _ => type.ToString(),
+    };
 
     private static string FormatStatus(SeasonStatus status) => status switch
     {

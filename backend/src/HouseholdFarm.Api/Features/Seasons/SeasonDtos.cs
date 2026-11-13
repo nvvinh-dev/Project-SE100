@@ -306,6 +306,22 @@ public sealed record UpdateSeasonSupplyPlanRequest(
     decimal PlannedQuantity,
     uint Version);
 
+/// <summary>
+/// Yêu cầu chốt mùa vụ (FR-SEA-09, BR-SEA-05, BR-GEN-14).
+/// </summary>
+public sealed record CloseSeasonRequest(
+    bool? Confirmed);
 
+/// <summary>
+/// Yêu cầu hủy mùa vụ (FR-SEA-10, BR-SEA-06, BR-GEN-06, BR-GEN-14).
+/// </summary>
+public sealed record CancelSeasonRequest(
+    string Reason,
+    bool? Confirmed);
 
+/// <summary>
+/// Yêu cầu mở lại mùa vụ đã chốt (FR-SEA-14, BR-SEA-08, BR-GEN-06).
+/// </summary>
+public sealed record ReopenSeasonRequest(
+    string Reason);
 
