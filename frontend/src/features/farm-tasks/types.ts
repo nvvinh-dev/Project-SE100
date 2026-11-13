@@ -1,3 +1,4 @@
+import type { ResponseWarning } from "@/lib/api-client";
 import type { FarmTaskStatus, FarmTaskType, Unit, UserRole } from "@/lib/enums";
 
 export interface FarmTaskAssigneeOption {
@@ -52,6 +53,27 @@ export interface CancelFarmTaskRequest {
 export interface CancelRecurrenceGroupResponse {
   recurrenceGroupId: string;
   cancelledCount: number;
+}
+
+export interface FarmTaskActualSupplyInput {
+  supplyId: string;
+  actualQuantity: number | null;
+}
+
+export interface RecordFarmTaskResultRequest {
+  status: FarmTaskStatus;
+  performedDate: string | null;
+  actualDurationMinutes: number | null;
+  abnormalNote: string | null;
+  fieldNote: string | null;
+  supplies: FarmTaskActualSupplyInput[] | null;
+  reason: string | null;
+  version: number;
+}
+
+export interface RecordFarmTaskResultOutcome {
+  data: FarmTaskDetail;
+  warnings: ResponseWarning[];
 }
 
 export interface FarmTaskSupplyUsageItem {
