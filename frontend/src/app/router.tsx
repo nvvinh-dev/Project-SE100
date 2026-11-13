@@ -7,6 +7,7 @@ import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
 import { accountRoutes, authRoutes } from "@/features/auth/routes";
 import { expenseRoutes } from "@/features/expenses/routes";
+import { cropRoutes } from "@/features/crops/routes";
 import { plotRoutes } from "@/features/plots/routes";
 import { salesRoutes } from "@/features/sales/routes";
 import { seasonRoutes } from "@/features/seasons/routes";
@@ -34,6 +35,7 @@ const routes: RouteObject[] = [
           { path: "/more", element: <MorePage />, handle: { access: ACCESS.household } satisfies RouteHandle },
           ...accountRoutes,
           ...plotRoutes,
+          ...cropRoutes,
           ...seasonRoutes,
           ...supplyRoutes,
           ...expenseRoutes,
