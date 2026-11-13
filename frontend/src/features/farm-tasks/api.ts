@@ -7,6 +7,7 @@ import type {
   FarmTaskDetail,
   FarmTaskListItem,
   FarmTaskQuery,
+  FarmTaskRemindersResponse,
   FarmTaskResponse,
   RecordFarmTaskResultOutcome,
   RecordFarmTaskResultRequest,
@@ -27,6 +28,13 @@ export async function getFarmTasks(query: FarmTaskQuery): Promise<FarmTaskPage> 
     totalCount: response.data.data.length,
   };
   return { items: response.data.data, meta };
+}
+
+export async function getFarmTaskReminders(mine = false): Promise<FarmTaskRemindersResponse> {
+  const response = await apiClient.get<ResponseEnvelope<FarmTaskRemindersResponse>>("/farm-tasks/reminders", {
+    params: mine ? { mine: true } : undefined,
+  });
+  return response.data.data;
 }
 
 export async function getFarmTaskAssignees(seasonId?: string): Promise<FarmTaskAssigneeOption[]> {

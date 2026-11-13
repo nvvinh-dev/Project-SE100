@@ -6,6 +6,7 @@ import {
   createRecurringFarmTasks,
   getFarmTask,
   getFarmTaskAssignees,
+  getFarmTaskReminders,
   getFarmTasks,
   recordFarmTaskResult,
   updateFarmTask,
@@ -24,9 +25,18 @@ import { stockTransactionKeys, supplyKeys } from "@/features/supplies/queries";
 export const farmTaskKeys = {
   all: ["farm-tasks"] as const,
   list: (query: FarmTaskQuery) => [...farmTaskKeys.all, "list", query] as const,
+  reminders: (mine: boolean) => [...farmTaskKeys.all, "reminders", mine] as const,
   detail: (id: string) => [...farmTaskKeys.all, "detail", id] as const,
   assignees: (seasonId?: string) => [...farmTaskKeys.all, "assignees", seasonId ?? "all"] as const,
 };
+
+export function useFarmTaskReminders(mine = false, enabled = true) {
+  return useQuery({
+    queryKey: farmTaskKeys.reminders(mine),
+    queryFn: () => getFarmTaskReminders(mine),
+    enabled,
+  });
+}
 
 export function useFarmTasks(query: FarmTaskQuery, enabled = true) {
   return useQuery({

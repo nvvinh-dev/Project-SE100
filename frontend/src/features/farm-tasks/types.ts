@@ -187,3 +187,14 @@ export interface FarmTaskQuery {
   to?: string;
   mine?: boolean;
 }
+
+export interface FarmTaskRemindersResponse {
+  asOfDate: string;
+  upcomingDays: number;
+  overdueCount: number;
+  todayCount: number;
+  upcomingCount: number;
+  overdue: FarmTaskListItem[];
+  today: FarmTaskListItem[];
+  upcoming: FarmTaskListItem[];
+}

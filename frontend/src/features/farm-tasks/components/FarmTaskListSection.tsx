@@ -147,47 +147,6 @@ export function FarmTaskListSection({
 
   const isFiltered = activeFilters.length > 0 || Boolean(state.search);
 
-  const columns: DataListColumn<FarmTaskListItem>[] = [
-    {
-      header: "Ngày dự kiến",
-      cell: (item) => <DateText value={item.scheduledDate} />,
-    },
-    {
-      header: "Công việc",
-      cell: (item) => (
-        <div className="flex items-center gap-1.5 font-medium">
-          <span>{formatFarmTaskTitle(item)}</span>
-          {item.recurrenceGroupId && <RepeatIcon className="h-3.5 w-3.5 text-muted-foreground" aria-label="Công việc lặp" />}
-        </div>
-      ),
-    },
-    ...(!fixedSeasonId
-      ? [
-          {
-            header: "Mùa vụ",
-            cell: (item: FarmTaskListItem) => `${item.plotCode} · ${item.cropName}`,
-          },
-        ]
-      : []),
-    ...(!isWorker
-      ? [
-          {
-            header: "Người thực hiện",
-            cell: (item: FarmTaskListItem) => item.assigneeName ?? "Chưa giao",
-          },
-        ]
-      : []),
-    {
-      header: "Trạng thái",
-      cell: (item) => (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusBadge kind="FarmTaskStatus" value={item.status} />
-          {item.isOverdue && <StatusBadge kind="Overdue" />}
-        </div>
-      ),
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-4">
       <SearchFilterBar
@@ -299,34 +258,91 @@ export function FarmTaskListSection({
         )
       ) : (
         <>
-          <DataList
+          <FarmTaskDataList
             items={tasksQuery.data.items}
-            getKey={(item) => item.id}
-            getHref={(item) => `/tasks/${item.id}`}
-            title={(item) => (
-              <span className="flex items-center gap-1.5">
-                <span>{formatFarmTaskTitle(item)}</span>
-                {item.recurrenceGroupId && <RepeatIcon className="h-3.5 w-3.5 text-muted-foreground" />}
-              </span>
-            )}
-            subtitle={(item) => {
-              const parts = [formatDate(item.scheduledDate), `${item.plotCode} · ${item.cropName}`];
-              if (!isWorker) {
-                parts.push(item.assigneeName ?? "Chưa giao");
-              }
-              return parts.join(" · ");
-            }}
-            badge={(item) => (
-              <div className="flex flex-col items-end gap-1">
-                <StatusBadge kind="FarmTaskStatus" value={item.status} />
-                {item.isOverdue && <StatusBadge kind="Overdue" />}
-              </div>
-            )}
-            columns={columns}
+            includeSeason={!fixedSeasonId}
+            isWorker={isWorker}
           />
           <Pagination meta={tasksQuery.data.meta} onPageChange={(page) => updateState({ page })} />
         </>
       )}
     </div>
+  );
+}
+
+interface FarmTaskDataListProps {
+  items: FarmTaskListItem[];
+  includeSeason?: boolean;
+  isWorker?: boolean;
+}
+
+export function FarmTaskDataList({ items, includeSeason = true, isWorker = false }: FarmTaskDataListProps) {
+  const columns: DataListColumn<FarmTaskListItem>[] = [
+    {
+      header: "Ngày dự kiến",
+      cell: (item) => <DateText value={item.scheduledDate} />,
+    },
+    {
+      header: "Công việc",
+      cell: (item) => (
+        <div className="flex items-center gap-1.5 font-medium">
+          <span>{formatFarmTaskTitle(item)}</span>
+          {item.recurrenceGroupId && <RepeatIcon className="h-3.5 w-3.5 text-muted-foreground" aria-label="Công việc lặp" />}
+        </div>
+      ),
+    },
+    ...(includeSeason
+      ? [
+          {
+            header: "Mùa vụ",
+            cell: (item: FarmTaskListItem) => `${item.plotCode} · ${item.cropName}`,
+          },
+        ]
+      : []),
+    ...(!isWorker
+      ? [
+          {
+            header: "Người thực hiện",
+            cell: (item: FarmTaskListItem) => item.assigneeName ?? "Chưa giao",
+          },
+        ]
+      : []),
+    {
+      header: "Trạng thái",
+      cell: (item) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge kind="FarmTaskStatus" value={item.status} />
+          {item.isOverdue && <StatusBadge kind="Overdue" />}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <DataList
+      items={items}
+      getKey={(item) => item.id}
+      getHref={(item) => `/tasks/${item.id}`}
+      title={(item) => (
+        <span className="flex items-center gap-1.5">
+          <span>{formatFarmTaskTitle(item)}</span>
+          {item.recurrenceGroupId && <RepeatIcon className="h-3.5 w-3.5 text-muted-foreground" />}
+        </span>
+      )}
+      subtitle={(item) => {
+        const parts = [formatDate(item.scheduledDate), `${item.plotCode} · ${item.cropName}`];
+        if (!isWorker) {
+          parts.push(item.assigneeName ?? "Chưa giao");
+        }
+        return parts.join(" · ");
+      }}
+      badge={(item) => (
+        <div className="flex flex-col items-end gap-1">
+          <StatusBadge kind="FarmTaskStatus" value={item.status} />
+          {item.isOverdue && <StatusBadge kind="Overdue" />}
+        </div>
+      )}
+      columns={columns}
+    />
   );
 }
