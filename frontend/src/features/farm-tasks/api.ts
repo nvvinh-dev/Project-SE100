@@ -7,6 +7,8 @@ import type {
   FarmTaskListItem,
   FarmTaskQuery,
   FarmTaskResponse,
+  RecordFarmTaskResultOutcome,
+  RecordFarmTaskResultRequest,
   UpdateFarmTaskRequest,
 } from "@/features/farm-tasks/types";
 import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
@@ -57,4 +59,15 @@ export async function cancelFarmTask(
     request,
   );
   return response.data.data;
+}
+
+export async function recordFarmTaskResult(
+  id: string,
+  request: RecordFarmTaskResultRequest,
+): Promise<RecordFarmTaskResultOutcome> {
+  const response = await apiClient.post<ResponseEnvelope<FarmTaskDetail>>(`/farm-tasks/${id}/record-result`, request);
+  return {
+    data: response.data.data,
+    warnings: response.data.warnings,
+  };
 }

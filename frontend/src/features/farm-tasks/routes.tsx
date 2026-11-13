@@ -4,6 +4,7 @@ import { FarmTaskCreatePage } from "@/features/farm-tasks/pages/FarmTaskCreatePa
 import { FarmTaskDetailPage } from "@/features/farm-tasks/pages/FarmTaskDetailPage";
 import { FarmTaskEditPage } from "@/features/farm-tasks/pages/FarmTaskEditPage";
 import { FarmTaskListPage } from "@/features/farm-tasks/pages/FarmTaskListPage";
+import { FarmTaskResultPage } from "@/features/farm-tasks/pages/FarmTaskResultPage";
 import { ACCESS } from "@/lib/auth/access";
 
 export const farmTaskRoutes: RouteObject[] = [
@@ -22,5 +23,10 @@ export const farmTaskRoutes: RouteObject[] = [
     path: "/tasks/:id/edit",
     element: <FarmTaskEditPage />,
     handle: { access: ACCESS.household, form: true } satisfies RouteHandle,
+  },
+  {
+    path: "/tasks/:id/result",
+    element: <FarmTaskResultPage />,
+    handle: { access: ACCESS.householdAndWorker, form: true } satisfies RouteHandle,
   },
 ];

@@ -5,15 +5,18 @@ import {
   getFarmTask,
   getFarmTaskAssignees,
   getFarmTasks,
+  recordFarmTaskResult,
   updateFarmTask,
 } from "@/features/farm-tasks/api";
 import type {
   CancelFarmTaskRequest,
   CreateFarmTaskRequest,
   FarmTaskQuery,
+  RecordFarmTaskResultRequest,
   UpdateFarmTaskRequest,
 } from "@/features/farm-tasks/types";
 import { seasonKeys } from "@/features/seasons/queries";
+import { stockTransactionKeys, supplyKeys } from "@/features/supplies/queries";
 
 export const farmTaskKeys = {
   all: ["farm-tasks"] as const,
@@ -76,6 +79,20 @@ export function useCancelFarmTask(id: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: farmTaskKeys.all });
       void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+    },
+  });
+}
+
+export function useRecordFarmTaskResult(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: RecordFarmTaskResultRequest) => recordFarmTaskResult(id, request),
+    onSuccess: (outcome) => {
+      queryClient.setQueryData(farmTaskKeys.detail(id), outcome.data);
+      void queryClient.invalidateQueries({ queryKey: farmTaskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
+      void queryClient.invalidateQueries({ queryKey: supplyKeys.all });
+      void queryClient.invalidateQueries({ queryKey: stockTransactionKeys.all });
     },
   });
 }
