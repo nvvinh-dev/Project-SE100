@@ -188,3 +188,14 @@ public sealed record FarmTaskQuery : PageQuery
     /// <summary>Chỉ lấy công việc được giao cho chính người đang đăng nhập.</summary>
     public bool Mine { get; init; }
 }
+
+/// <summary>Nhắc việc theo mốc ngày Việt Nam: Trễ hạn, Hôm nay, Sắp tới (FR-TSK-08, BR-TSK-12).</summary>
+public sealed record FarmTaskRemindersResponse(
+    DateOnly AsOfDate,
+    int UpcomingDays,
+    int OverdueCount,
+    int TodayCount,
+    int UpcomingCount,
+    IReadOnlyList<FarmTaskListItem> Overdue,
+    IReadOnlyList<FarmTaskListItem> Today,
+    IReadOnlyList<FarmTaskListItem> Upcoming);

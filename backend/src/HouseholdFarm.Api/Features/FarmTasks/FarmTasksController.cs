@@ -15,6 +15,12 @@ public sealed class FarmTasksController(IFarmTaskService farmTaskService) : Cont
         CancellationToken ct) =>
         Ok(await farmTaskService.GetListAsync(query, ct));
 
+    [HttpGet("reminders")]
+    public async Task<ActionResult<FarmTaskRemindersResponse>> GetRemindersAsync(
+        [FromQuery] bool mine = false,
+        CancellationToken ct = default) =>
+        Ok(await farmTaskService.GetRemindersAsync(mine, ct));
+
     [HttpGet("assignees")]
     public async Task<ActionResult<IReadOnlyList<FarmTaskAssigneeOption>>> GetAssigneesAsync(
         [FromQuery] Guid? seasonId,
