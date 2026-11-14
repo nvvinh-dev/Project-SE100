@@ -1,6 +1,6 @@
 import { CircleUserIcon } from "lucide-react";
 import { useState } from "react";
-import { Link, Outlet } from "react-router";
+import { Link, Outlet, ScrollRestoration } from "react-router";
 import { AppSidebar } from "@/app/layouts/AppSidebar";
 import { BottomNav } from "@/app/layouts/BottomNav";
 import { QuickAddDialog } from "@/app/layouts/QuickAddDialog";
@@ -33,9 +33,13 @@ export function AppLayout() {
     <ForbiddenState role={user.role} missingPermission={access.missingPermission} />
   );
 
+  // Sang trang mới thì cuộn lên đầu trang; quay lại bằng nút Back thì về đúng vị trí cũ.
+  const scrollRestoration = <ScrollRestoration />;
+
   if (user.role === "SystemAdmin") {
     return (
       <>
+        {scrollRestoration}
         <header className="border-b">
           <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
             <Link to="/admin" className="font-semibold text-primary">
@@ -58,6 +62,7 @@ export function AppLayout() {
 
   return (
     <>
+      {scrollRestoration}
       <AppSidebar items={navigation.sidebarItems} groups={navigation.groups} onQuickAdd={openQuickAdd} />
       <div className="md:pl-60">
         <main
