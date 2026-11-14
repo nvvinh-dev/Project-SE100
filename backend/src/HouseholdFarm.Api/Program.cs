@@ -10,6 +10,7 @@ using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
+using HouseholdFarm.Api.Data.Seed;
 using HouseholdFarm.Api.Features.Admin;
 using HouseholdFarm.Api.Features.AuditLogs;
 using HouseholdFarm.Api.Features.Auth;
@@ -110,7 +111,17 @@ builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 
+builder.Services.AddScoped<DevDataSeeder>();
+
 var app = builder.Build();
+
+// `dotnet run -- --seed`: tạo dữ liệu mẫu rồi thoát, không mở máy chủ; chạy lại lệnh không có --seed để dùng ứng dụng.
+if (args.Contains("--seed"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<DevDataSeeder>().SeedAsync(app.Lifetime.ApplicationStopping);
+    return;
+}
 
 // Chỉ ghi phương thức, đường dẫn, mã trả về và thời gian; không ghi query string vì có thể chứa số điện thoại khi tìm kiếm.
 app.UseSerilogRequestLogging();
