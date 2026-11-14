@@ -191,6 +191,26 @@ public class AdminTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await AuthApi.LoginAsync(factory, household.Member.PhoneNumber!, TestData.Password, ct);
     }
 
+    [Fact(DisplayName = "BR-USR-15: Chủ hộ đang bị khóa tạm vì nhập sai nhiều lần, được đặt lại mật khẩu thì đăng nhập được ngay")]
+    public async Task ResetPassword_TemporarilyLockedOwner_ClearsLockout()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var admin = await factory.CreateSystemAdminAsync(ct);
+        var phone = household.Owner.PhoneNumber!;
+        await TestData.SetTemporaryLockoutAsync(factory.Postgres, household.Owner.Id, ct);
+        await (await AuthApi.CreateClient(factory).PostAsJsonAsync(AuthApi.LoginPath, new { phone, password = TestData.Password }, ct))
+            .AssertProblemAsync(HttpStatusCode.TooManyRequests, ErrorCodes.TooManyAttempts, ct);
+
+        var response = await factory.CreateClientFor(admin).PostAsJsonAsync(
+            $"{AccountsPath}/{household.Owner.Id}/reset-password",
+            new { newPassword = "ChuHoMoi2026" },
+            ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await AuthApi.LoginAsync(factory, phone, "ChuHoMoi2026", ct);
+    }
+
     private async Task<List<System.Text.Json.JsonElement>> ItemsAsync(HttpClient client, string queryString, CancellationToken ct)
     {
         var response = await client.GetAsync(AccountsPath + queryString, ct);

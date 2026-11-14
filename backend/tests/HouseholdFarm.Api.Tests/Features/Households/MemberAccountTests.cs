@@ -228,6 +228,29 @@ public class MemberAccountTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await AuthApi.LoginAsync(factory, phone, "MatKhauMoi2026", ct);
     }
 
+    [Fact(DisplayName = "BR-USR-15: thành viên đang bị khóa tạm vì nhập sai nhiều lần, được đặt lại mật khẩu thì đăng nhập được ngay")]
+    public async Task ResetPassword_TemporarilyLockedMember_ClearsLockout()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var phone = household.Member.PhoneNumber!;
+        await TestData.SetTemporaryLockoutAsync(factory.Postgres, household.Member.Id, ct);
+        await (await AuthApi.CreateClient(factory).PostAsJsonAsync(AuthApi.LoginPath, new { phone, password = TestData.Password }, ct))
+            .AssertProblemAsync(HttpStatusCode.TooManyRequests, ErrorCodes.TooManyAttempts, ct);
+
+        var response = await factory.CreateClientFor(household.Owner).PostAsJsonAsync(
+            $"{MembersPath}/{household.Member.Id}/reset-password",
+            new { newPassword = "MatKhauMoi2026" },
+            ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await AuthApi.LoginAsync(factory, phone, "MatKhauMoi2026", ct);
+        await using var db = factory.Postgres.CreateDbContext();
+        var saved = await db.Users.SingleAsync(u => u.Id == household.Member.Id, ct);
+        Assert.Null(saved.LockoutEnd);
+        Assert.Equal(0, saved.AccessFailedCount);
+    }
+
     [Fact(DisplayName = "D-22: đặt lại mật khẩu yếu trả VALIDATION_ERROR")]
     public async Task ResetPassword_WeakPassword_ReturnsValidationError()
     {

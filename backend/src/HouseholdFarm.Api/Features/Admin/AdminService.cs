@@ -131,6 +131,9 @@ public sealed class AdminService(
             // không còn giá trị với mọi cơ chế của Identity dựa trên stamp.
             user.PasswordHash = userManager.PasswordHasher.HashPassword(user, request.NewPassword);
             user.SecurityStamp = Guid.NewGuid().ToString("N");
+            // BR-USR-15: người quên mật khẩu thường đã nhập sai nhiều lần; gỡ khóa tạm để đăng nhập được ngay bằng mật khẩu mới.
+            user.AccessFailedCount = 0;
+            user.LockoutEnd = null;
             await db.SaveChangesAsync(ct);
 
             // BR-USR-04: kết thúc mọi phiên; Chủ hộ đăng nhập lại bằng mật khẩu mới.
