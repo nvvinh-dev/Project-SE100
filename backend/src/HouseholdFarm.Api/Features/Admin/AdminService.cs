@@ -34,7 +34,7 @@ public sealed class AdminService(
 
     public async Task<PagedResult<AdminAccountResponse>> GetAccountsAsync(AdminAccountQuery query, CancellationToken ct)
     {
-        EnsureSystemAdmin();
+        currentUser.EnsureSystemAdmin();
 
         var accounts = HouseholdAccounts().AsNoTracking();
 
@@ -67,7 +67,7 @@ public sealed class AdminService(
 
     public async Task<AdminAccountResponse> GetAccountAsync(Guid id, CancellationToken ct)
     {
-        EnsureSystemAdmin();
+        currentUser.EnsureSystemAdmin();
 
         return await HouseholdAccounts().AsNoTracking().Where(u => u.Id == id).Select(_toResponse).SingleOrDefaultAsync(ct)
             ?? throw NotFound();
@@ -141,7 +141,7 @@ public sealed class AdminService(
     // xác thực và thao tác của Chủ hộ; giao dịch bao cả nhật ký và thu hồi phiên (BR-GEN-07).
     private async Task<AdminAccountResponse> ChangeAccountAsync(Guid id, Func<ApplicationUser, Task> change, CancellationToken ct)
     {
-        EnsureSystemAdmin();
+        currentUser.EnsureSystemAdmin();
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await refreshTokenRevoker.LockUserAsync(id, ct);
@@ -158,19 +158,6 @@ public sealed class AdminService(
     // BR-USR-06: chỉ tài khoản thuộc hộ; tài khoản Quản trị được xử lý như không tồn tại.
     private IQueryable<ApplicationUser> HouseholdAccounts() =>
         db.Users.Where(u => u.Role != UserRole.SystemAdmin && u.HouseholdId != null);
-
-    private void EnsureSystemAdmin()
-    {
-        if (!currentUser.IsAuthenticated)
-        {
-            throw new AppException(ErrorCodes.Unauthenticated, "Vui lòng đăng nhập.");
-        }
-
-        if (currentUser.Role != UserRole.SystemAdmin)
-        {
-            throw new AppException(ErrorCodes.Forbidden, "Chỉ Quản trị hệ thống được thực hiện thao tác này.");
-        }
-    }
 
     // Tham số sort đã được AdminAccountQueryValidator kiểm tra, chỉ còn các trường trong AdminAccountQuery.SortFields.
     private static IOrderedQueryable<ApplicationUser> Sort(IQueryable<ApplicationUser> users, string? sort)

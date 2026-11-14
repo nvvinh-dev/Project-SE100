@@ -75,6 +75,15 @@ public sealed class AuditLogService(AppDbContext db, ICurrentUser currentUser, I
         return new PagedResult<AuditLogListItem>(items, page.Page, page.PageSize, page.TotalCount);
     }
 
-    private static JsonElement? ParseJson(string? json) =>
-        json is null ? null : JsonDocument.Parse(json).RootElement.Clone();
+    // Clone để giá trị dùng được sau khi trả JsonDocument (và bộ nhớ đệm của nó) về pool.
+    private static JsonElement? ParseJson(string? json)
+    {
+        if (json is null)
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
 }
