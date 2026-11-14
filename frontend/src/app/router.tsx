@@ -5,6 +5,7 @@ import { MorePage } from "@/app/pages/MorePage";
 import { NotFoundPage } from "@/app/pages/NotFoundPage";
 import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
+import { adminRoutes } from "@/features/admin/routes";
 import { auditLogRoutes } from "@/features/audit-logs/routes";
 import { accountRoutes, authRoutes } from "@/features/auth/routes";
 import { expenseRoutes } from "@/features/expenses/routes";
@@ -40,6 +41,7 @@ const routes: RouteObject[] = [
           ...cropRoutes,
           ...householdRoutes,
           ...auditLogRoutes,
+          ...adminRoutes,
           ...seasonRoutes,
           ...supplyRoutes,
           ...expenseRoutes,

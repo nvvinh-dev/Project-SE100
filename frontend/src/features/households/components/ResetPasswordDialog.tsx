@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
-import { Controller, useForm, type UseFormSetError } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { showSuccess } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
@@ -15,29 +15,40 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useResetMemberPassword } from "@/features/households/queries";
 import { type ResetPasswordFormValues, resetPasswordFormSchema } from "@/features/households/schemas";
 import { setFieldErrors } from "@/lib/form-errors";
 
 interface ResetPasswordDialogProps {
-  memberId: string;
-  memberName: string;
+  /** Họ tên chủ tài khoản được đặt lại mật khẩu. */
+  accountName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Gửi mật khẩu mới; lỗi ném ra được hiện trong hộp thoại, giữ nguyên ô đã nhập. */
+  reset: (values: ResetPasswordFormValues) => Promise<unknown>;
+  pending: boolean;
+  /** Toast khi thành công, nhắc người đặt lại báo mật khẩu mới cho chủ tài khoản. */
+  successMessage: string;
 }
 
-/** Chủ hộ đặt mật khẩu mới cho thành viên quên mật khẩu (FR-HH-09). Thao tác ngắn nên dùng hộp thoại. */
-export function ResetPasswordDialog({ memberId, memberName, open, onOpenChange }: ResetPasswordDialogProps) {
-  const resetPassword = useResetMemberPassword(memberId);
-  const pending = resetPassword.isPending;
-
+/**
+ * Đặt mật khẩu mới cho người quên mật khẩu: Chủ hộ cho thành viên (FR-HH-09), Quản trị cho Chủ hộ (FR-ADM-03).
+ * Thao tác ngắn nên dùng hộp thoại.
+ */
+export function ResetPasswordDialog({
+  accountName,
+  open,
+  onOpenChange,
+  reset,
+  pending,
+  successMessage,
+}: ResetPasswordDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Đặt lại mật khẩu</DialogTitle>
           <DialogDescription>
-            {memberName} sẽ bị đăng xuất trên mọi thiết bị và đăng nhập lại bằng mật khẩu mới.
+            {accountName} sẽ bị đăng xuất trên mọi thiết bị và đăng nhập lại bằng mật khẩu mới.
           </DialogDescription>
         </DialogHeader>
         {/* Dựng form mới mỗi lần mở để không giữ mật khẩu của lần trước. */}
@@ -45,19 +56,11 @@ export function ResetPasswordDialog({ memberId, memberName, open, onOpenChange }
           <ResetPasswordForm
             pending={pending}
             onCancel={() => onOpenChange(false)}
-            onSubmit={(values, setError, setSubmitError) =>
-              resetPassword.mutate(values, {
-                onSuccess: () => {
-                  onOpenChange(false);
-                  showSuccess("Đã đặt lại mật khẩu. Hãy báo mật khẩu mới cho thành viên.");
-                },
-                onError: (error) => {
-                  if (!setFieldErrors(error, setError, ["newPassword"])) {
-                    setSubmitError(error);
-                  }
-                },
-              })
-            }
+            onSubmit={async (values) => {
+              await reset(values);
+              onOpenChange(false);
+              showSuccess(successMessage);
+            }}
           />
         )}
       </DialogContent>
@@ -68,11 +71,7 @@ export function ResetPasswordDialog({ memberId, memberName, open, onOpenChange }
 interface ResetPasswordFormProps {
   pending: boolean;
   onCancel: () => void;
-  onSubmit: (
-    values: ResetPasswordFormValues,
-    setError: UseFormSetError<ResetPasswordFormValues>,
-    setSubmitError: (error: unknown) => void,
-  ) => void;
+  onSubmit: (values: ResetPasswordFormValues) => Promise<void>;
 }
 
 function ResetPasswordForm({ pending, onCancel, onSubmit }: ResetPasswordFormProps) {
@@ -82,15 +81,19 @@ function ResetPasswordForm({ pending, onCancel, onSubmit }: ResetPasswordFormPro
     defaultValues: { newPassword: "" },
   });
 
+  async function submit(values: ResetPasswordFormValues) {
+    setSubmitError(null);
+    try {
+      await onSubmit(values);
+    } catch (error) {
+      if (!setFieldErrors(error, form.setError, ["newPassword"])) {
+        setSubmitError(error);
+      }
+    }
+  }
+
   return (
-    <form
-      noValidate
-      onSubmit={form.handleSubmit((values) => {
-        setSubmitError(null);
-        onSubmit(values, form.setError, setSubmitError);
-      })}
-      className="flex flex-col gap-4"
-    >
+    <form noValidate onSubmit={form.handleSubmit(submit)} className="flex flex-col gap-4">
       <Controller
         name="newPassword"
         control={form.control}

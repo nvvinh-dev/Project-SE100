@@ -21,7 +21,7 @@ import { MemberInfoForm } from "@/features/households/components/MemberInfoForm"
 import { MemberPermissionsSection } from "@/features/households/components/MemberPermissionsSection";
 import { MemberRoleSection } from "@/features/households/components/MemberRoleSection";
 import { ResetPasswordDialog } from "@/features/households/components/ResetPasswordDialog";
-import { useLockMember, useMember, useUnlockMember } from "@/features/households/queries";
+import { useLockMember, useMember, useResetMemberPassword, useUnlockMember } from "@/features/households/queries";
 import type { MemberResponse } from "@/features/households/types";
 import { ApiError } from "@/lib/api-error";
 import { userRoleLabels } from "@/lib/enum-labels";
@@ -57,6 +57,7 @@ function MemberDetail({ member, onReload }: { member: MemberResponse; onReload: 
   const [dialog, setDialog] = useState<Dialog>(null);
   const lockMember = useLockMember(member.id);
   const unlockMember = useUnlockMember(member.id);
+  const resetPassword = useResetMemberPassword(member.id);
   const [actionError, setActionError] = useState<unknown>(null);
   // BR-USR-07: tài khoản Chủ hộ không sửa, khóa, đặt lại mật khẩu ở đây; Chủ hộ sửa thông tin của mình ở trang Tài khoản.
   const isOwner = member.role === "Owner";
@@ -165,10 +166,12 @@ function MemberDetail({ member, onReload }: { member: MemberResponse; onReload: 
         pending={unlockMember.isPending}
       />
       <ResetPasswordDialog
-        memberId={member.id}
-        memberName={member.fullName}
+        accountName={member.fullName}
         open={dialog === "reset-password"}
         onOpenChange={(open) => setDialog(open ? "reset-password" : null)}
+        reset={(values) => resetPassword.mutateAsync(values)}
+        pending={resetPassword.isPending}
+        successMessage="Đã đặt lại mật khẩu. Hãy báo mật khẩu mới cho thành viên."
       />
     </div>
   );
