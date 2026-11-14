@@ -196,6 +196,16 @@ public static class TestData
     }
 
     /// <summary>Số điện thoại đã chuẩn hóa (10 chữ số bắt đầu bằng 0, BR-USR-01) chưa tài khoản nào dùng.</summary>
+    /// <summary>Đặt tài khoản vào trạng thái khóa tạm do đăng nhập sai nhiều lần (BR-USR-15), còn 15 phút nữa mới hết.</summary>
+    public static async Task SetTemporaryLockoutAsync(PostgresFixture postgres, Guid userId, CancellationToken ct)
+    {
+        var lockoutEnd = TimeProvider.System.GetUtcNow().AddMinutes(15);
+        await using var db = postgres.CreateDbContext();
+        await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(
+            s => s.SetProperty(u => u.LockoutEnd, lockoutEnd).SetProperty(u => u.AccessFailedCount, 5),
+            ct);
+    }
+
     public static string NewPhone() => $"09{Interlocked.Increment(ref _phoneSequence):D8}";
 
     private static ApplicationUser NewUser(Guid? householdId, UserRole role, string fullName)
