@@ -31,7 +31,29 @@ export function TodayTasksCard() {
   }
 
   const data = remindersQuery.data;
-  const prioritized = [...data.overdue, ...data.today, ...data.upcoming].slice(0, 5);
+  const groups = [
+    {
+      key: "overdue",
+      title: "Trễ hạn",
+      count: data.overdueCount,
+      items: data.overdue.slice(0, 5),
+      urgent: data.overdueCount > 0,
+    },
+    {
+      key: "today",
+      title: "Hôm nay",
+      count: data.todayCount,
+      items: data.today.slice(0, 5),
+      urgent: false,
+    },
+    {
+      key: "upcoming",
+      title: `${data.upcomingDays} ngày tới`,
+      count: data.upcomingCount,
+      items: data.upcoming.slice(0, 5),
+      urgent: false,
+    },
+  ] as const;
 
   return (
     <section className="flex flex-col gap-3 rounded-lg border p-4">
@@ -65,37 +87,51 @@ export function TodayTasksCard() {
           className="flex min-h-11 flex-col items-center justify-center rounded-md border px-2 py-1.5 transition-colors hover:bg-muted/50"
         >
           <span className="text-base font-semibold">{data.upcomingCount}</span>
-          <span className="text-xs text-muted-foreground">Sắp tới</span>
+          <span className="text-xs text-muted-foreground">{data.upcomingDays} ngày tới</span>
         </Link>
       </div>
 
-      {prioritized.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Không có công việc nào cần làm trong {data.upcomingDays} ngày tới.
-        </p>
-      ) : (
-        <ul className="divide-y">
-          {prioritized.map((item) => (
-            <li key={item.id}>
-              <Link
-                to={`/tasks/${item.id}`}
-                className="flex min-h-11 flex-wrap items-center justify-between gap-2 py-2.5 text-sm hover:underline"
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium">{formatFarmTaskTitle(item)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {item.plotCode} · {item.cropName} · <DateText value={item.scheduledDate} />
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <StatusBadge kind="FarmTaskStatus" value={item.status} />
-                  {item.isOverdue && <StatusBadge kind="Overdue" />}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="flex flex-col gap-3">
+        {groups.map((group) => (
+          <div key={group.key} className="flex flex-col gap-1">
+            <h3
+              className={cn(
+                "text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+                group.urgent && "text-destructive",
+              )}
+            >
+              {group.title} ({group.count})
+            </h3>
+            {group.items.length === 0 ? (
+              <p className="py-1 text-xs text-muted-foreground">Không có</p>
+            ) : (
+              <ul className="divide-y">
+                {group.items.map((item) => (
+                  <li key={item.id}>
+                    <Link
+                      to={`/tasks/${item.id}`}
+                      className="flex min-h-11 flex-wrap items-center justify-between gap-2 py-2 text-sm hover:underline"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {formatFarmTaskTitle(item)} · {item.plotCode} · {item.cropName}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.assigneeName ?? "Chưa giao người"} · <DateText value={item.scheduledDate} />
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <StatusBadge kind="FarmTaskStatus" value={item.status} />
+                        {item.isOverdue && <StatusBadge kind="Overdue" />}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

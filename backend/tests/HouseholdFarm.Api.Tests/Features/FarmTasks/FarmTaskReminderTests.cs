@@ -34,6 +34,9 @@ public sealed class FarmTaskReminderTests(PostgresFixture postgres) : IClassFixt
         var todayPending = await FarmTaskTestData.CreateTaskAsync(
             postgres, household, seasonInScope, new DateOnly(2026, 10, 10), ct,
             assignee: household.Owner, status: FarmTaskStatus.Pending);
+        var unassignedToday = await FarmTaskTestData.CreateTaskAsync(
+            postgres, household, seasonInScope, new DateOnly(2026, 10, 10), ct,
+            assignee: null, status: FarmTaskStatus.Pending);
         var upcomingBoundary = await FarmTaskTestData.CreateTaskAsync(
             postgres, household, seasonInScope, new DateOnly(2026, 10, 13), ct,
             assignee: household.Worker, status: FarmTaskStatus.Pending);
@@ -64,15 +67,30 @@ public sealed class FarmTaskReminderTests(PostgresFixture postgres) : IClassFixt
 
         Assert.Equal([overdueWaiting.Id, overduePending.Id], overdueIds);
         Assert.All(ownerData.GetProperty("overdue").EnumerateArray(), e => Assert.True(e.GetProperty("isOverdue").GetBoolean()));
-        Assert.Equal([todayPending.Id, outOfScopeTask.Id], todayIds.OrderBy(id => id == todayPending.Id ? 0 : 1).ToList());
+        Assert.Equal(3, todayIds.Count);
+        Assert.Contains(todayPending.Id, todayIds);
+        Assert.Contains(unassignedToday.Id, todayIds);
+        Assert.Contains(outOfScopeTask.Id, todayIds);
         Assert.Equal([upcomingBoundary.Id], upcomingIds);
 
         Assert.DoesNotContain(tooFarTask.Id, overdueIds.Concat(todayIds).Concat(upcomingIds));
         Assert.DoesNotContain(doneTask.Id, overdueIds.Concat(todayIds).Concat(upcomingIds));
         Assert.DoesNotContain(cancelledTask.Id, overdueIds.Concat(todayIds).Concat(upcomingIds));
 
-        // Thành viên không thấy mùa vụ ngoài phân công, và lọc mine=true chỉ trả việc của chính mình
+        // Thành viên không thấy mùa vụ ngoài phân công, nhưng thấy việc chưa giao người trong mùa vụ được phân công
         var memberClient = factory.CreateClientFor(household.Member);
+        var memberAllData = (await (await memberClient.GetAsync(RemindersPath, ct)).ReadJsonAsync(ct)).GetProperty("data");
+        var memberOverdueIds = memberAllData.GetProperty("overdue").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        var memberTodayIds = memberAllData.GetProperty("today").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        var memberUpcomingIds = memberAllData.GetProperty("upcoming").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        Assert.Equal([overdueWaiting.Id, overduePending.Id], memberOverdueIds);
+        Assert.Equal(2, memberTodayIds.Count);
+        Assert.Contains(todayPending.Id, memberTodayIds);
+        Assert.Contains(unassignedToday.Id, memberTodayIds);
+        Assert.DoesNotContain(outOfScopeTask.Id, memberOverdueIds.Concat(memberTodayIds).Concat(memberUpcomingIds));
+        Assert.Equal([upcomingBoundary.Id], memberUpcomingIds);
+
+        // Lọc mine=true chỉ trả việc được giao cho chính mình (loại cả việc chưa giao người)
         var memberData = (await (await memberClient.GetAsync($"{RemindersPath}?mine=true", ct)).ReadJsonAsync(ct)).GetProperty("data");
         Assert.Equal([overdueWaiting.Id], memberData.GetProperty("overdue").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList());
         Assert.Equal(0, memberData.GetProperty("todayCount").GetInt32());

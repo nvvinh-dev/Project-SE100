@@ -5,7 +5,7 @@ import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { PermissionGate } from "@/components/common/PermissionGate";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   FarmTaskDataList,
   type FarmTaskFilterState,
@@ -73,7 +73,44 @@ export function FarmTaskListPage() {
         next.delete("tab");
       } else {
         next.set("tab", nextTab);
+        next.delete("page");
+        next.delete("search");
+        next.delete("seasonId");
+        next.delete("assigneeId");
+        next.delete("status");
+        next.delete("isOverdue");
+        next.delete("from");
+        next.delete("to");
       }
+      return next;
+    });
+  }
+
+  function toggleMine() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (next.get("mine") === "true") {
+        next.delete("mine");
+      } else {
+        next.set("mine", "true");
+        next.delete("assigneeId");
+      }
+      next.delete("page");
+      return next;
+    });
+  }
+
+  function clearListFilters() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("page");
+      next.delete("search");
+      next.delete("seasonId");
+      next.delete("assigneeId");
+      next.delete("status");
+      next.delete("isOverdue");
+      next.delete("from");
+      next.delete("to");
       return next;
     });
   }
@@ -155,6 +192,10 @@ export function FarmTaskListPage() {
         ? "Hôm nay không có công việc nào đến hạn."
         : `Không có công việc nào trong ${upcomingDays} ngày tới.`;
 
+  const hasIgnoredListFilters =
+    activeTab !== "all" &&
+    Boolean(state.search || state.seasonId || state.assigneeId || state.statusFilter || state.from || state.to);
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -169,40 +210,71 @@ export function FarmTaskListPage() {
         }
       />
 
-      <div role="tablist" aria-label="Nhóm nhắc việc" className="flex gap-2 overflow-x-auto pb-1">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => selectTab(tab.key)}
-              className={cn(
-                "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors",
-                isActive
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : tab.urgent
-                    ? "border-destructive/50 text-destructive hover:bg-destructive/5"
-                    : "bg-background hover:bg-muted",
-              )}
-            >
-              <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span
-                  className={cn(
-                    "rounded-full px-1.5 py-0.5 text-xs",
-                    isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-foreground",
-                  )}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="tablist" aria-label="Nhóm nhắc việc" className="flex gap-2 overflow-x-auto pb-1">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => selectTab(tab.key)}
+                className={cn(
+                  "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors",
+                  isActive
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : tab.urgent
+                      ? "border-destructive/50 text-destructive hover:bg-destructive/5"
+                      : "bg-background hover:bg-muted",
+                )}
+              >
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-xs",
+                      isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-foreground",
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {!isWorker && (
+          <Button
+            type="button"
+            variant={mineOnly ? "default" : "outline"}
+            aria-pressed={mineOnly}
+            className="min-h-11 shrink-0"
+            onClick={toggleMine}
+          >
+            Việc của tôi
+          </Button>
+        )}
       </div>
+
+      {hasIgnoredListFilters && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm"
+        >
+          <span className="text-muted-foreground">Bộ lọc tìm kiếm, mùa vụ, trạng thái và ngày chỉ áp dụng ở tab Tất cả.</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" className="min-h-11" onClick={() => selectTab("all")}>
+              Xem ở tab Tất cả
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={clearListFilters}>
+              Xóa bộ lọc
+            </Button>
+          </div>
+        </div>
+      )}
 
       {activeTab === "all" ? (
         <FarmTaskListSection
