@@ -1,6 +1,23 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { correctHarvest, createHarvest, getHarvest, getHarvests, voidHarvest } from "@/features/harvests/api";
-import type { CorrectHarvestRecordRequest, HarvestRecordQuery, VoidHarvestRecordRequest } from "@/features/harvests/types";
+import {
+  correctHarvest,
+  createHarvest,
+  createProduceStockAdjustment,
+  getHarvest,
+  getHarvests,
+  getProduceStockAdjustments,
+  getProduceStockOverview,
+  voidHarvest,
+  voidProduceStockAdjustment,
+} from "@/features/harvests/api";
+import type {
+  CorrectHarvestRecordRequest,
+  HarvestRecordQuery,
+  ProduceStockAdjustmentQuery,
+  ProduceStockOverviewQuery,
+  VoidHarvestRecordRequest,
+  VoidProduceStockAdjustmentRequest,
+} from "@/features/harvests/types";
 import { seasonKeys } from "@/features/seasons/queries";
 
 export const harvestKeys = {
@@ -11,6 +28,8 @@ export const harvestKeys = {
 
 export const produceStockKeys = {
   all: ["produce-stock"] as const,
+  overview: (query: ProduceStockOverviewQuery) => [...produceStockKeys.all, "overview", query] as const,
+  adjustments: (query: ProduceStockAdjustmentQuery) => [...produceStockKeys.all, "adjustments", query] as const,
 };
 
 export function useHarvests(query: HarvestRecordQuery) {
@@ -57,6 +76,40 @@ export function useVoidHarvest(id: string) {
   const invalidate = useInvalidateHarvests();
   return useMutation({
     mutationFn: (request: VoidHarvestRecordRequest) => voidHarvest(id, request),
+    onSuccess: invalidate,
+  });
+}
+
+export function useProduceStockOverview(query: ProduceStockOverviewQuery, enabled = true) {
+  return useQuery({
+    queryKey: produceStockKeys.overview(query),
+    queryFn: () => getProduceStockOverview(query),
+    enabled,
+  });
+}
+
+export function useProduceStockAdjustments(query: ProduceStockAdjustmentQuery, enabled = true) {
+  return useQuery({
+    queryKey: produceStockKeys.adjustments(query),
+    queryFn: () => getProduceStockAdjustments(query),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useCreateProduceStockAdjustment() {
+  const invalidate = useInvalidateHarvests();
+  return useMutation({
+    mutationFn: createProduceStockAdjustment,
+    onSuccess: invalidate,
+  });
+}
+
+export function useVoidProduceStockAdjustment() {
+  const invalidate = useInvalidateHarvests();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: VoidProduceStockAdjustmentRequest }) =>
+      voidProduceStockAdjustment(id, request),
     onSuccess: invalidate,
   });
 }

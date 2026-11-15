@@ -160,6 +160,82 @@ public class ProduceStockService(AppDbContext db, ICurrentUser currentUser) : IP
         }
     }
 
+    public async Task<IReadOnlyList<ProduceStockOverviewItem>> GetOverviewAsync(
+        ProduceStockOverviewQuery query,
+        CancellationToken ct)
+    {
+        currentUser.EnsureNotWorker();
+
+        // BR-USR-13: Chủ hộ xem cả hộ; Thành viên theo phạm vi; Thành viên có ManageFinance xem mọi mùa vụ.
+        var seasonsQuery = db.Seasons
+            .AsNoTracking()
+            .VisibleTo(currentUser, ExtraPermission.ManageFinance);
+
+        if (query.SeasonId is { } seasonId)
+        {
+            seasonsQuery = seasonsQuery.Where(s => s.Id == seasonId);
+        }
+
+        var seasons = await seasonsQuery
+            .OrderBy(s => s.Status == SeasonStatus.InProgress ? 0 : 1)
+            .ThenByDescending(s => s.StartDate)
+            .ThenBy(s => s.Id)
+            .Select(s => new
+            {
+                s.Id,
+                CropName = s.Crop.Name,
+                PlotCode = s.Plot.Code,
+                SeasonStartDate = s.StartDate,
+                SeasonStatus = s.Status,
+                s.Crop.YieldUnit,
+            })
+            .ToListAsync(ct);
+
+        if (query.SeasonId is not null && seasons.Count == 0)
+        {
+            throw AppException.NotFound("mùa vụ");
+        }
+
+        if (seasons.Count == 0)
+        {
+            return [];
+        }
+
+        var seasonMap = seasons.ToDictionary(s => s.Id);
+        var stocks = await ComputeStockAsync(seasons.Select(s => s.Id).ToList(), ct);
+
+        IEnumerable<ProduceStockResponse> filtered = stocks;
+        if (query.QualityGrade is { } grade)
+        {
+            filtered = filtered.Where(s => s.QualityGrade == grade);
+        }
+
+        // Khi không lọc theo một mùa vụ cụ thể, chỉ trả các dòng còn tồn khác 0 (FR-HAR-06).
+        if (query.SeasonId is null)
+        {
+            filtered = filtered.Where(s => s.Quantity != 0m);
+        }
+
+        return filtered
+            .Select(s =>
+            {
+                var season = seasonMap[s.SeasonId];
+                return new ProduceStockOverviewItem(
+                    s.SeasonId,
+                    season.CropName,
+                    season.PlotCode,
+                    season.SeasonStartDate,
+                    season.SeasonStatus,
+                    season.YieldUnit,
+                    s.QualityGrade,
+                    s.TotalHarvested,
+                    s.TotalSold,
+                    s.TotalAdjusted,
+                    s.Quantity);
+            })
+            .ToList();
+    }
+
     private async Task<IReadOnlyList<ProduceStockResponse>> ComputeStockAsync(
         IReadOnlyList<Guid> distinctIds,
         CancellationToken ct)

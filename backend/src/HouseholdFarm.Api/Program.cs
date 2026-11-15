@@ -109,6 +109,7 @@ builder.Services.AddScoped<ISeasonSupplyPlanService, SeasonSupplyPlanService>();
 builder.Services.AddScoped<IFarmTaskService, FarmTaskService>();
 builder.Services.AddScoped<ISupplyService, SupplyService>();
 builder.Services.AddScoped<IHarvestService, HarvestService>();
+builder.Services.AddScoped<IProduceStockAdjustmentService, ProduceStockAdjustmentService>();
 builder.Services.AddScoped<StockLedger>();
 builder.Services.AddScoped<StockOperations>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
