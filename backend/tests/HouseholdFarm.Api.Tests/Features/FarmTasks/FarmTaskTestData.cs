@@ -30,6 +30,7 @@ public static class FarmTaskTestData
         FarmTaskStatus status = FarmTaskStatus.Pending,
         Guid? recurrenceGroupId = null,
         DateOnly? performedDate = null,
+        ApplicationUser? createdBy = null,
         params (Supply Supply, decimal? PlannedQuantity, decimal? ActualQuantity, Guid? StockTxId)[] supplies)
     {
         var task = new FarmTask
@@ -54,7 +55,7 @@ public static class FarmTaskTestData
             }).ToList(),
         };
 
-        await using var db = postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        await using var db = postgres.CreateDbContext(TestCurrentUser.For(createdBy ?? household.Owner));
         db.FarmTasks.Add(task);
         await db.SaveChangesAsync(ct);
         return task;

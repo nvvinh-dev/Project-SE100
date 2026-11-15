@@ -61,4 +61,13 @@ public sealed class FarmTasksController(IFarmTaskService farmTaskService) : Cont
         request.IncludeRecurrenceGroup
             ? Ok(await farmTaskService.CancelRecurrenceGroupAsync(id, ct))
             : Ok(await farmTaskService.CancelAsync(id, request, ct));
+
+    [HttpPost("{id:guid}/record-result")]
+    [ProducesResponseType(typeof(FarmTaskResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WorkerFarmTaskResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<FarmTaskResponse>> RecordResultAsync(
+        Guid id,
+        RecordFarmTaskResultRequest request,
+        CancellationToken ct) =>
+        Ok(await farmTaskService.RecordResultAsync(id, request, ct));
 }

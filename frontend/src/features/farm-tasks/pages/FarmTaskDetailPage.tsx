@@ -1,4 +1,4 @@
-import { EllipsisVerticalIcon, PencilIcon, RepeatIcon, Trash2Icon } from "lucide-react";
+import { CheckCircle2Icon, EllipsisVerticalIcon, PencilIcon, RepeatIcon, Trash2Icon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { NotFoundPage } from "@/app/pages/NotFoundPage";
@@ -11,7 +11,7 @@ import { PermissionGate } from "@/components/common/PermissionGate";
 import { QuantityText } from "@/components/common/QuantityText";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { showError, showSuccess } from "@/components/common/toast";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,6 +82,15 @@ export function FarmTaskDetailPage() {
     recurrenceGroupId !== null &&
     isOwnerOrCreator &&
     (cancellableGroupCount === null || cancellableGroupCount > 0);
+
+  // FR-TSK-07: Nhân công chỉ được ghi kết quả khi việc chưa hoàn thành, không được bổ sung sau Done.
+  const canRecordResult =
+    user !== undefined &&
+    ((user.role === "Worker" && isPendingOrWaiting) ||
+      (user.role === "Owner" && (isPendingOrWaiting || task.status === "Done")) ||
+      (user.role === "Member" &&
+        (isPendingOrWaiting || task.status === "Done") &&
+        (task.assigneeId === user.id || fullDetail?.createdById === user.id)));
   const title = formatFarmTaskTitle(task);
 
   async function handleCancelTask() {
@@ -118,44 +127,52 @@ export function FarmTaskDetailPage() {
         description={`${task.plotCode} · ${task.cropName}`}
         backTo="/tasks"
         action={
-          <PermissionGate allowed={canEditOrCancel || canCancelGroup}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Thao tác khác">
-                  <EllipsisVerticalIcon />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEditOrCancel && (
-                  <>
-                    <DropdownMenuItem asChild className="min-h-11">
-                      <Link to={`/tasks/${task.id}/edit`}>
-                        <PencilIcon />
-                        Sửa công việc
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
+          <div className="flex items-center gap-2">
+            <PermissionGate allowed={canRecordResult}>
+              <Link to={`/tasks/${task.id}/result`} className={buttonVariants()}>
+                <CheckCircle2Icon data-icon="inline-start" />
+                {task.status === "Done" ? "Bổ sung kết quả" : "Ghi kết quả"}
+              </Link>
+            </PermissionGate>
+            <PermissionGate allowed={canEditOrCancel || canCancelGroup}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Thao tác khác">
+                    <EllipsisVerticalIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEditOrCancel && (
+                    <>
+                      <DropdownMenuItem asChild className="min-h-11">
+                        <Link to={`/tasks/${task.id}/edit`}>
+                          <PencilIcon />
+                          Sửa công việc
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="min-h-11 text-destructive focus:text-destructive"
+                        onSelect={() => setCancelOpen(true)}
+                      >
+                        <Trash2Icon />
+                        Hủy công việc
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {canCancelGroup && (
                     <DropdownMenuItem
                       className="min-h-11 text-destructive focus:text-destructive"
-                      onSelect={() => setCancelOpen(true)}
+                      onSelect={() => setCancelGroupOpen(true)}
                     >
-                      <Trash2Icon />
-                      Hủy công việc
+                      <RepeatIcon />
+                      Hủy các lần lặp còn lại
                     </DropdownMenuItem>
-                  </>
-                )}
-                {canCancelGroup && (
-                  <DropdownMenuItem
-                    className="min-h-11 text-destructive focus:text-destructive"
-                    onSelect={() => setCancelGroupOpen(true)}
-                  >
-                    <RepeatIcon />
-                    Hủy các lần lặp còn lại
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </PermissionGate>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </PermissionGate>
+          </div>
         }
       />
 
@@ -223,7 +240,11 @@ export function FarmTaskDetailPage() {
         )}
       </section>
 
-      {(task.status === "Done" || task.performedDate !== null || task.actualDurationMinutes !== null) && (
+      {(task.status === "Done" ||
+        task.performedDate !== null ||
+        task.actualDurationMinutes !== null ||
+        task.abnormalNote !== null ||
+        task.fieldNote !== null) && (
         <section className="flex flex-col gap-3 rounded-lg border p-4">
           <h2 className="text-sm font-semibold">Kết quả thực hiện</h2>
           <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
