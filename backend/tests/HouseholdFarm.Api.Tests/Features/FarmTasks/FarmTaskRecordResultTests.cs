@@ -272,27 +272,47 @@ public class FarmTaskRecordResultTests(ApiFactory factory) : IClassFixture<ApiFa
         Assert.Equal("Nhập sai số lượng thực tế", oldTxA.VoidReason);
         Assert.Equal(initialDate, oldTxA.TransactionDate);
         Assert.Equal(1, await db.FarmTaskSupplyUsages.CountAsync(u => u.FarmTaskId == task.Id, ct));
+
+        // Chi phí vật tư của mùa vụ chỉ còn giao dịch hiệu lực cho lượng mới (6m của supplyA)
+        var activeOutTxs = await db.StockTransactions
+            .Where(t => t.SeasonId == season.Id && t.Type == StockTransactionType.Out && t.VoidedAt == null)
+            .ToListAsync(ct);
+        var activeOutTx = Assert.Single(activeOutTxs);
+        Assert.Equal(supplyA.Id, activeOutTx.SupplyId);
+        Assert.Equal(-6m, activeOutTx.Quantity);
+        Assert.Equal(6m * activeOutTx.UnitCost, activeOutTx.TotalCost);
     }
 
-    [Fact(DisplayName = "BR-TSK-05, BR-TSK-06, BR-SEA-10: Kiểm tra điều kiện trạng thái công việc và mùa vụ khi ghi kết quả")]
+    [Fact(DisplayName = "BR-TSK-05, BR-TSK-06, BR-SEA-10: Kiểm tra điều kiện trạng thái công việc, ngày tương lai, WaitingForSupply->Pending và mùa vụ khi ghi kết quả")]
     public async Task RecordResult_InvalidStates_Rejected()
     {
         var ct = TestContext.Current.CancellationToken;
-        var household = await factory.CreateHouseholdAsync(ct);
-        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
-        var plannedSeason = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Planned, ct);
-        var activeSeason = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+        await using var customFactory = new FarmTaskTestData.FixedClockFactory(
+            factory.Postgres,
+            new DateTimeOffset(2026, 10, 10, 5, 0, 0, TimeSpan.Zero));
+
+        var household = await customFactory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(customFactory.Postgres, household, "TD001", ct);
+        var plannedSeason = await TestData.CreateSeasonAsync(customFactory.Postgres, household, plot, SeasonStatus.Planned, ct);
+        var activeSeason = await TestData.CreateSeasonAsync(customFactory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+        var closedSeason = await TestData.CreateSeasonAsync(customFactory.Postgres, household, plot, SeasonStatus.Closed, ct);
 
         var plannedSeasonTask = await FarmTaskTestData.CreateTaskAsync(
-            factory.Postgres, household, plannedSeason, new DateOnly(2026, 10, 5), ct);
+            customFactory.Postgres, household, plannedSeason, new DateOnly(2026, 10, 5), ct);
         var doneTask = await FarmTaskTestData.CreateTaskAsync(
-            factory.Postgres, household, activeSeason, new DateOnly(2026, 10, 6), ct,
+            customFactory.Postgres, household, activeSeason, new DateOnly(2026, 10, 6), ct,
+            status: FarmTaskStatus.Done);
+        var closedDoneTask = await FarmTaskTestData.CreateTaskAsync(
+            customFactory.Postgres, household, closedSeason, new DateOnly(2026, 10, 6), ct,
             status: FarmTaskStatus.Done);
         var cancelledTask = await FarmTaskTestData.CreateTaskAsync(
-            factory.Postgres, household, activeSeason, new DateOnly(2026, 10, 7), ct,
+            customFactory.Postgres, household, activeSeason, new DateOnly(2026, 10, 7), ct,
             status: FarmTaskStatus.Cancelled);
+        var waitingTask = await FarmTaskTestData.CreateTaskAsync(
+            customFactory.Postgres, household, activeSeason, new DateOnly(2026, 10, 8), ct,
+            status: FarmTaskStatus.WaitingForSupply);
 
-        var ownerClient = factory.CreateClientFor(household.Owner);
+        var ownerClient = customFactory.CreateClientFor(household.Owner);
 
         // Mùa vụ Planned không được ghi kết quả -> SEASON_INVALID_STATE
         var plannedRes = await ownerClient.PostAsJsonAsync(
@@ -301,6 +321,14 @@ public class FarmTaskRecordResultTests(ApiFactory factory) : IClassFixture<ApiFa
             FarmTaskTestData.JsonOptions,
             ct);
         await plannedRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
+
+        // Bổ sung việc Done khi mùa vụ Closed -> SEASON_INVALID_STATE
+        var closedRes = await ownerClient.PostAsJsonAsync(
+            $"{TasksPath}/{closedDoneTask.Id}/record-result",
+            new RecordFarmTaskResultRequest(FarmTaskStatus.Done, new DateOnly(2026, 10, 6), null, null, "Bổ sung", null, null, closedDoneTask.Version),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await closedRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
 
         // Done không quay về WaitingForSupply -> TASK_INVALID_STATE
         var revertDoneRes = await ownerClient.PostAsJsonAsync(
@@ -320,13 +348,31 @@ public class FarmTaskRecordResultTests(ApiFactory factory) : IClassFixture<ApiFa
 
         // Done thiếu performedDate -> VALIDATION_ERROR (BR-TSK-05)
         var pendingTask = await FarmTaskTestData.CreateTaskAsync(
-            factory.Postgres, household, activeSeason, new DateOnly(2026, 10, 8), ct);
+            customFactory.Postgres, household, activeSeason, new DateOnly(2026, 10, 8), ct);
         var missingDateRes = await ownerClient.PostAsJsonAsync(
             $"{TasksPath}/{pendingTask.Id}/record-result",
             new RecordFarmTaskResultRequest(FarmTaskStatus.Done, null, null, null, null, null, null, pendingTask.Version),
             FarmTaskTestData.JsonOptions,
             ct);
         await missingDateRes.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+
+        // Ngày thực hiện ở tương lai -> VALIDATION_ERROR (BR-GEN-05)
+        var futureDateRes = await ownerClient.PostAsJsonAsync(
+            $"{TasksPath}/{pendingTask.Id}/record-result",
+            new RecordFarmTaskResultRequest(FarmTaskStatus.Done, new DateOnly(2026, 10, 11), null, null, null, null, null, pendingTask.Version),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await futureDateRes.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+
+        // WaitingForSupply quay về Pending khi đã có vật tư -> 200 OK
+        var backToPendingRes = await ownerClient.PostAsJsonAsync(
+            $"{TasksPath}/{waitingTask.Id}/record-result",
+            new RecordFarmTaskResultRequest(FarmTaskStatus.Pending, null, null, null, "Đã nhập thêm vật tư", null, null, waitingTask.Version),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        Assert.Equal(HttpStatusCode.OK, backToPendingRes.StatusCode);
+        var backToPendingData = (await backToPendingRes.ReadJsonAsync(ct)).GetProperty("data");
+        Assert.Equal("Pending", backToPendingData.GetProperty("status").GetString());
     }
 
     [Fact(DisplayName = "FR-TSK-10, BR-TSK-07, BR-USR-14, TC-20(b): Nhân công chỉ xem việc mình, JSON bỏ trường tồn kho/người tạo, và không ghi được vật tư")]
@@ -412,5 +458,22 @@ public class FarmTaskRecordResultTests(ApiFactory factory) : IClassFixture<ApiFa
         var workerOkData = (await workerOkRes.ReadJsonAsync(ct)).GetProperty("data");
         Assert.Equal("Done", workerOkData.GetProperty("status").GetString());
         Assert.False(workerOkData.TryGetProperty("createdById", out _));
+
+        // FR-TSK-07: Nhân công không được bổ sung sau khi việc đã Done -> FORBIDDEN
+        var workerVersionAfterDone = workerOkData.GetProperty("version").GetUInt32();
+        var workerSupplementRes = await workerClient.PostAsJsonAsync(
+            $"{TasksPath}/{workerTask.Id}/record-result",
+            new RecordFarmTaskResultRequest(
+                FarmTaskStatus.Done,
+                new DateOnly(2026, 10, 10),
+                55,
+                null,
+                "Cố bổ sung",
+                null,
+                null,
+                workerVersionAfterDone),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await workerSupplementRes.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
     }
 }

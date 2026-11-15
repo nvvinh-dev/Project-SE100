@@ -87,6 +87,22 @@ export function FarmTaskResultPage() {
     );
   }
 
+  if (isWorker && task.status === "Done") {
+    return (
+      <div className="flex flex-col gap-4">
+        <PageHeader title="Ghi kết quả công việc" backTo={`/tasks/${task.id}`} />
+        <p className="rounded-lg border p-4 text-sm text-destructive">
+          Nhân công không được bổ sung dữ liệu sau khi công việc đã hoàn thành.
+        </p>
+        <div>
+          <Link to={`/tasks/${task.id}`} className={buttonVariants({ variant: "outline" })}>
+            Quay lại chi tiết
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (task.status === "Cancelled") {
     return (
       <div className="flex flex-col gap-4">
@@ -132,7 +148,7 @@ function FarmTaskResultForm({ task, isWorker }: FarmTaskResultFormProps) {
   });
 
   const currentStatus = useWatch({ control: form.control, name: "status" });
-  const isWaitingForSupply = !isWorker && currentStatus === "WaitingForSupply";
+  const isWaitingForSupply = !isWorker && currentStatus !== "Done";
   const initialSupplyNames = new Map(
     isHouseholdTask(task) ? task.supplyUsages.map((u) => [u.supplyId, u.supplyName]) : [],
   );
@@ -214,7 +230,17 @@ function FarmTaskResultForm({ task, isWorker }: FarmTaskResultFormProps) {
   }
 
   function handlePickAnotherSupply() {
+    const failedSupplyId =
+      typeof insufficientError?.details?.supplyId === "string" ? insufficientError.details.supplyId : null;
     setInsufficientError(null);
+
+    if (failedSupplyId) {
+      const failedIndex = form.getValues("supplies").findIndex((row) => row.supplyId === failedSupplyId);
+      if (failedIndex >= 0) {
+        remove(failedIndex);
+      }
+    }
+
     const hasBlankRow = form.getValues("supplies").some((row) => row.supplyId === "");
     if (!hasBlankRow) {
       append({
@@ -266,6 +292,9 @@ function FarmTaskResultForm({ task, isWorker }: FarmTaskResultFormProps) {
                   >
                     <NativeSelectOption value="Done">Hoàn thành công việc</NativeSelectOption>
                     <NativeSelectOption value="WaitingForSupply">Chờ bổ sung vật tư</NativeSelectOption>
+                    {task.status === "WaitingForSupply" && (
+                      <NativeSelectOption value="Pending">Chưa làm</NativeSelectOption>
+                    )}
                   </NativeSelect>
                   <FieldDescription>
                     Chọn &ldquo;Chờ bổ sung vật tư&rdquo; nếu kho chưa đủ vật tư để hoàn thành hôm nay.

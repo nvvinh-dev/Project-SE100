@@ -594,6 +594,14 @@ public sealed class FarmTaskService(
             throw new AppException(ErrorCodes.TaskInvalidState, "Không thể ghi kết quả cho công việc đã hủy.");
         }
 
+        // FR-TSK-07: Nhân công không được bổ sung dữ liệu sau khi công việc đã hoàn thành.
+        if (currentUser.Role == UserRole.Worker && task.Status == FarmTaskStatus.Done)
+        {
+            throw new AppException(
+                ErrorCodes.Forbidden,
+                "Nhân công không được bổ sung dữ liệu sau khi công việc đã hoàn thành.");
+        }
+
         if (task.Status == FarmTaskStatus.Done && targetStatus != FarmTaskStatus.Done)
         {
             throw new AppException(
@@ -642,11 +650,11 @@ public sealed class FarmTaskService(
         string? rawReason,
         CancellationToken ct)
     {
-        if (targetStatus == FarmTaskStatus.WaitingForSupply && inputs.Any(s => s.ActualQuantity is > 0))
+        if (targetStatus is FarmTaskStatus.WaitingForSupply or FarmTaskStatus.Pending && inputs.Any(s => s.ActualQuantity is > 0))
         {
             throw AppException.Validation(new Dictionary<string, string[]>
             {
-                ["supplies"] = ["Khi chuyển công việc sang Chờ bổ sung vật tư thì không xuất kho vật tư."],
+                ["supplies"] = ["Khi công việc chưa hoàn thành thì không xuất kho vật tư."],
             });
         }
 
@@ -719,6 +727,7 @@ public sealed class FarmTaskService(
                 }
 
                 // BR-TSK-08: cùng ActualQuantity với dòng đã có StockTransactionId -> không tạo giao dịch mới.
+                // Khi bổ sung đổi performedDate cho việc Done, giao dịch đã xuất giữ nguyên transaction_date cũ; chỉ dòng đổi lượng mới xuất lại theo ngày mới.
                 continue;
             }
 

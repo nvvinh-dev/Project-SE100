@@ -24,7 +24,7 @@ const actualSupplyRowSchema = z.object({
 export function recordResultFormSchema(isWorker: boolean) {
   return z
     .object({
-      status: z.enum(["Done", "WaitingForSupply"]),
+      status: z.enum(["Done", "WaitingForSupply", "Pending"]),
       performedDate: z.string().trim(),
       actualDurationMinutes: z.string().trim(),
       abnormalNote: z.string().trim().max(2000, { error: "Ghi chú bất thường tối đa 2000 ký tự." }),
@@ -181,11 +181,11 @@ export function toRecordFarmTaskResultRequest(
   version: number,
   reason: string | null,
 ): RecordFarmTaskResultRequest {
-  const isWaiting = !isWorker && values.status === "WaitingForSupply";
+  const isNotDone = !isWorker && values.status !== "Done";
 
   let supplies: FarmTaskActualSupplyInput[] | null = null;
   if (!isWorker) {
-    if (isWaiting) {
+    if (isNotDone) {
       supplies = values.supplies
         .filter((row) => row.supplyId && (row.plannedQuantity !== null || row.initialStockTransactionId !== null))
         .map((row) => ({ supplyId: row.supplyId, actualQuantity: null }));
@@ -204,7 +204,7 @@ export function toRecordFarmTaskResultRequest(
 
   return {
     status: isWorker ? "Done" : values.status,
-    performedDate: isWaiting ? null : values.performedDate || null,
+    performedDate: isNotDone ? null : values.performedDate || null,
     actualDurationMinutes: values.actualDurationMinutes ? Number(values.actualDurationMinutes) : null,
     abnormalNote: values.abnormalNote || null,
     fieldNote: values.fieldNote || null,

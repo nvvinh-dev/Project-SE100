@@ -212,15 +212,6 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
             factory.Postgres,
             household,
             season,
-            new DateOnly(2026, 10, 10),
-            ct,
-            createdBy: household.Member,
-            supplies: (supply1, 4m, null, null));
-
-        var ownerPendingTask = await FarmTaskTestData.CreateTaskAsync(
-            factory.Postgres,
-            household,
-            season,
             new DateOnly(2026, 10, 11),
             ct,
             createdBy: household.Owner);

@@ -167,8 +167,8 @@ public sealed class RecordFarmTaskResultRequestValidator : AbstractValidator<Rec
             .Cascade(CascadeMode.Stop)
             .NotNull().WithMessage("Vui lòng chọn trạng thái kết quả công việc.")
             .IsInEnum().WithMessage("Trạng thái công việc không hợp lệ.")
-            .Must(s => s is FarmTaskStatus.Done or FarmTaskStatus.WaitingForSupply)
-            .WithMessage("Trạng thái kết quả chỉ có thể là Hoàn thành hoặc Chờ bổ sung vật tư.");
+            .Must(s => s is FarmTaskStatus.Done or FarmTaskStatus.WaitingForSupply or FarmTaskStatus.Pending)
+            .WithMessage("Trạng thái kết quả chỉ có thể là Hoàn thành, Chờ bổ sung vật tư hoặc Chưa làm.");
 
         // BR-TSK-05: chuyển Hoàn thành bắt buộc có ngày thực hiện.
         When(r => r.Status == FarmTaskStatus.Done, () =>
