@@ -2,6 +2,7 @@ using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace HouseholdFarm.Api.Data.Seed;
 
@@ -17,12 +18,22 @@ namespace HouseholdFarm.Api.Data.Seed;
 public sealed class DevDataSeeder(
     AppDbContext db,
     UserManager<ApplicationUser> userManager,
+    IConfiguration configuration,
     ILogger<DevDataSeeder> logger)
 {
     /// <summary>Mật khẩu của mọi tài khoản mẫu, chỉ dùng cho dữ liệu mẫu.</summary>
     public const string Password = "MatKhauMau@2026";
 
-    /// <summary>Tạo dữ liệu mẫu; trả <c>false</c> khi database đã có hộ nên không tạo gì.</summary>
+    /// <summary>Khóa bí mật chứa mật khẩu Quản trị hệ thống khi database không ở máy mình.</summary>
+    public const string AdminPasswordKey = "Seed:AdminPassword";
+
+    // So đúng tên máy chủ trong chuỗi kết nối, không phân giải tên: database nào không ghi rõ là máy mình thì coi là database demo.
+    private static readonly string[] _localHosts = ["localhost", "127.0.0.1", "::1"];
+
+    /// <summary>
+    /// Tạo dữ liệu mẫu; trả <c>false</c> khi database đã có hộ nên không tạo gì. Database không ở máy mình mà chưa khai báo
+    /// <see cref="AdminPasswordKey"/> thì ném lỗi, không tạo gì.
+    /// </summary>
     public async Task<bool> SeedAsync(CancellationToken ct)
     {
         if (await db.Households.AnyAsync(ct))
@@ -31,10 +42,12 @@ public sealed class DevDataSeeder(
             return false;
         }
 
+        var adminPassword = ResolveAdminPassword();
+
         // Một giao dịch cho toàn bộ dữ liệu mẫu: lỗi giữa chừng thì không để lại hộ thiếu tài khoản, lần chạy sau vẫn tạo được.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        await CreateUserAsync(householdId: null, UserRole.SystemAdmin, "Quản trị hệ thống", "0900000001");
+        await CreateUserAsync(householdId: null, UserRole.SystemAdmin, "Quản trị hệ thống", "0900000001", adminPassword);
 
         var householdA = new Household
         {
@@ -79,12 +92,35 @@ public sealed class DevDataSeeder(
         }
     }
 
+    // Repo công khai mật khẩu mẫu: trên database demo, ai đọc repo cũng vào được Quản trị hệ thống, và ứng dụng không cho
+    // đặt lại mật khẩu tài khoản này (BR-USR-06). Nên ngoài máy mình thì bắt buộc mật khẩu riêng từ user-secrets.
+    private string ResolveAdminPassword()
+    {
+        var host = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString()).Host ?? string.Empty;
+        var isLocal = host.Split(',').All(h => _localHosts.Contains(h.Trim(), StringComparer.OrdinalIgnoreCase));
+        if (isLocal)
+        {
+            return Password;
+        }
+
+        var configured = configuration[AdminPasswordKey];
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        throw new InvalidOperationException(
+            $"Database không ở máy này nên tài khoản Quản trị hệ thống không được dùng mật khẩu mẫu. "
+            + $"Khai báo mật khẩu riêng bằng: dotnet user-secrets set \"{AdminPasswordKey}\" \"<mật khẩu>\"");
+    }
+
     // Tạo qua UserManager để mật khẩu được băm và tài khoản bật khóa tạm như tài khoản đăng ký thật (BR-USR-15).
     private async Task<ApplicationUser> CreateUserAsync(
         Guid? householdId,
         UserRole role,
         string fullName,
         string phone,
+        string password = Password,
         bool canManageStock = false,
         bool canManageFinance = false,
         bool canCloseSeason = false)
@@ -101,7 +137,7 @@ public sealed class DevDataSeeder(
             CanCloseSeason = canCloseSeason,
         };
 
-        var result = await userManager.CreateAsync(user, Password);
+        var result = await userManager.CreateAsync(user, password);
         if (!result.Succeeded)
         {
             throw new InvalidOperationException(
