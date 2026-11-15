@@ -16,6 +16,7 @@ public sealed class FarmTaskService(
     AppDbContext db,
     ICurrentUser currentUser,
     IAppClock clock,
+    IConfiguration configuration,
     ISeasonStateGuard seasonStateGuard,
     IStockService stockService) : IFarmTaskService
 {
@@ -85,28 +86,72 @@ public sealed class FarmTaskService(
                 || (t.Assignee != null && EF.Functions.ILike(t.Assignee.FullName, pattern, SearchPatterns.EscapeCharacter)));
         }
 
-        return await Sort(tasks, query.Sort)
-            .ThenBy(t => t.Id)
-            .Select(t => new FarmTaskListItem(
-                t.Id,
-                t.SeasonId,
-                t.Season.PlotId,
-                t.Season.Plot.Code,
-                t.Season.CropId,
-                t.Season.Crop.Name,
-                t.Type,
-                t.TypeOther,
-                t.ScheduledDate,
-                t.PlannedDurationMinutes,
-                t.AssigneeId,
-                t.Assignee != null ? t.Assignee.FullName : null,
-                t.Status,
-                (t.Status == FarmTaskStatus.Pending || t.Status == FarmTaskStatus.WaitingForSupply)
-                && t.ScheduledDate < today,
-                t.PerformedDate,
-                t.RecurrenceGroupId))
+        return await ProjectListItems(
+                Sort(tasks, query.Sort).ThenBy(t => t.Id),
+                today)
             .ToPagedResultAsync(query, ct);
     }
+
+    public async Task<FarmTaskRemindersResponse> GetRemindersAsync(bool mine, CancellationToken ct)
+    {
+        currentUser.EnsureHouseholdUser();
+
+        // BR-TSK-12: số ngày sắp tới đọc từ cấu hình Reminders:UpcomingDays, ngày "hôm nay" tính theo giờ Việt Nam qua IAppClock.
+        var upcomingDays = Math.Max(0, configuration.GetValue("Reminders:UpcomingDays", 3));
+        var today = clock.Today;
+        var upcomingEnd = today.AddDays(upcomingDays);
+
+        var tasks = db.FarmTasks
+            .AsNoTracking()
+            .VisibleTo(currentUser)
+            .Where(t => (t.Status == FarmTaskStatus.Pending || t.Status == FarmTaskStatus.WaitingForSupply)
+                        && t.ScheduledDate <= upcomingEnd);
+
+        if (mine)
+        {
+            var userId = currentUser.UserId;
+            tasks = tasks.Where(t => t.AssigneeId == userId);
+        }
+
+        var items = await ProjectListItems(
+                tasks.OrderBy(t => t.ScheduledDate).ThenBy(t => t.Id),
+                today)
+            .ToListAsync(ct);
+
+        var overdue = items.Where(t => t.ScheduledDate < today).ToList();
+        var todayItems = items.Where(t => t.ScheduledDate == today).ToList();
+        var upcoming = items.Where(t => t.ScheduledDate > today).ToList();
+
+        return new FarmTaskRemindersResponse(
+            today,
+            upcomingDays,
+            overdue.Count,
+            todayItems.Count,
+            upcoming.Count,
+            overdue,
+            todayItems,
+            upcoming);
+    }
+
+    private static IQueryable<FarmTaskListItem> ProjectListItems(IQueryable<FarmTask> query, DateOnly today) =>
+        query.Select(t => new FarmTaskListItem(
+            t.Id,
+            t.SeasonId,
+            t.Season.PlotId,
+            t.Season.Plot.Code,
+            t.Season.CropId,
+            t.Season.Crop.Name,
+            t.Type,
+            t.TypeOther,
+            t.ScheduledDate,
+            t.PlannedDurationMinutes,
+            t.AssigneeId,
+            t.Assignee != null ? t.Assignee.FullName : null,
+            t.Status,
+            (t.Status == FarmTaskStatus.Pending || t.Status == FarmTaskStatus.WaitingForSupply)
+            && t.ScheduledDate < today,
+            t.PerformedDate,
+            t.RecurrenceGroupId));
 
     public async Task<IReadOnlyList<FarmTaskAssigneeOption>> GetAssigneesAsync(Guid? seasonId, CancellationToken ct)
     {
