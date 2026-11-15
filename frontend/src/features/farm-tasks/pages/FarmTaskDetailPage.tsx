@@ -19,9 +19,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useCancelFarmTask, useCancelRecurrenceGroup, useFarmTask } from "@/features/farm-tasks/queries";
+import { useCancelFarmTask, useFarmTask, useFarmTasks } from "@/features/farm-tasks/queries";
 import { formatFarmTaskTitle } from "@/features/farm-tasks/task-format";
-import type { FarmTaskDetail, FarmTaskResponse } from "@/features/farm-tasks/types";
+import type { CancelRecurrenceGroupResponse, FarmTaskDetail, FarmTaskResponse } from "@/features/farm-tasks/types";
 import { ApiError } from "@/lib/api-error";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
@@ -35,7 +35,14 @@ export function FarmTaskDetailPage() {
   const { data: user } = useCurrentUser();
   const taskQuery = useFarmTask(id);
   const cancelMutation = useCancelFarmTask(id);
-  const cancelGroupMutation = useCancelRecurrenceGroup();
+
+  const loadedTask = taskQuery.data;
+  const loadedFullDetail = loadedTask && isOwnerOrMemberDetail(loadedTask) ? loadedTask : null;
+  const loadedRecurrenceGroupId = loadedFullDetail?.recurrenceGroupId ?? null;
+  const seasonTasksQuery = useFarmTasks(
+    { seasonId: loadedFullDetail?.seasonId, pageSize: 100 },
+    Boolean(loadedFullDetail && loadedRecurrenceGroupId),
+  );
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelGroupOpen, setCancelGroupOpen] = useState(false);
@@ -58,6 +65,23 @@ export function FarmTaskDetailPage() {
   const isPendingOrWaiting = task.status === "Pending" || task.status === "WaitingForSupply";
   const fullDetail = isOwnerOrMemberDetail(task) ? task : null;
   const recurrenceGroupId = fullDetail?.recurrenceGroupId ?? null;
+  const isOwnerOrCreator = user?.role === "Owner" || fullDetail?.createdById === user?.id;
+  const canEditOrCancel = isHouseholdRole && isPendingOrWaiting && isOwnerOrCreator;
+
+  const cancellableGroupCount =
+    recurrenceGroupId && seasonTasksQuery.data
+      ? seasonTasksQuery.data.items.filter(
+          (item) =>
+            item.recurrenceGroupId === recurrenceGroupId &&
+            (item.status === "Pending" || item.status === "WaitingForSupply"),
+        ).length
+      : null;
+
+  const canCancelGroup =
+    isHouseholdRole &&
+    recurrenceGroupId !== null &&
+    isOwnerOrCreator &&
+    (cancellableGroupCount === null || cancellableGroupCount > 0);
   const title = formatFarmTaskTitle(task);
 
   async function handleCancelTask() {
@@ -75,8 +99,11 @@ export function FarmTaskDetailPage() {
       return;
     }
     try {
-      const result = await cancelGroupMutation.mutateAsync(recurrenceGroupId);
-      showSuccess(`Đã hủy ${result.cancelledCount} công việc chưa thực hiện trong nhóm lặp.`);
+      const result = (await cancelMutation.mutateAsync({
+        version: task.version,
+        includeRecurrenceGroup: true,
+      })) as CancelRecurrenceGroupResponse;
+      showSuccess(`Đã hủy ${result.cancelledCount} công việc`);
       setCancelGroupOpen(false);
       void navigate("/tasks");
     } catch (error) {
@@ -91,7 +118,7 @@ export function FarmTaskDetailPage() {
         description={`${task.plotCode} · ${task.cropName}`}
         backTo="/tasks"
         action={
-          <PermissionGate allowed={isHouseholdRole && isPendingOrWaiting}>
+          <PermissionGate allowed={canEditOrCancel || canCancelGroup}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Thao tác khác">
@@ -99,27 +126,31 @@ export function FarmTaskDetailPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild className="min-h-11">
-                  <Link to={`/tasks/${task.id}/edit`}>
-                    <PencilIcon />
-                    Sửa công việc
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="min-h-11 text-destructive focus:text-destructive"
-                  onSelect={() => setCancelOpen(true)}
-                >
-                  <Trash2Icon />
-                  Hủy công việc
-                </DropdownMenuItem>
-                {recurrenceGroupId && (
+                {canEditOrCancel && (
+                  <>
+                    <DropdownMenuItem asChild className="min-h-11">
+                      <Link to={`/tasks/${task.id}/edit`}>
+                        <PencilIcon />
+                        Sửa công việc
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="min-h-11 text-destructive focus:text-destructive"
+                      onSelect={() => setCancelOpen(true)}
+                    >
+                      <Trash2Icon />
+                      Hủy công việc
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canCancelGroup && (
                   <DropdownMenuItem
                     className="min-h-11 text-destructive focus:text-destructive"
                     onSelect={() => setCancelGroupOpen(true)}
                   >
                     <RepeatIcon />
-                    Hủy cả nhóm lặp
+                    Hủy các lần lặp còn lại
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -247,11 +278,15 @@ export function FarmTaskDetailPage() {
       <ConfirmDialog
         open={cancelGroupOpen}
         onOpenChange={setCancelGroupOpen}
-        title="Hủy toàn bộ công việc chưa làm trong nhóm lặp?"
-        description="Mọi công việc đang Chưa làm hoặc Chờ bổ sung vật tư thuộc nhóm lặp này sẽ bị hủy. Công việc đã Hoàn thành vẫn được giữ nguyên."
-        confirmLabel="Hủy nhóm lặp"
+        title="Hủy các lần lặp còn lại?"
+        description={
+          cancellableGroupCount !== null
+            ? `Sẽ hủy ${cancellableGroupCount} công việc chưa làm trong nhóm lặp. Các công việc đã Hoàn thành vẫn được giữ nguyên.`
+            : "Mọi công việc đang Chưa làm hoặc Chờ bổ sung vật tư thuộc nhóm lặp này sẽ bị hủy. Công việc đã Hoàn thành vẫn được giữ nguyên."
+        }
+        confirmLabel="Hủy các lần lặp còn lại"
         destructive
-        pending={cancelGroupMutation.isPending}
+        pending={cancelMutation.isPending}
         onConfirm={() => void handleCancelGroup()}
       />
     </div>

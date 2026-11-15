@@ -22,25 +22,26 @@ public sealed class FarmTasksController(IFarmTaskService farmTaskService) : Cont
         Ok(await farmTaskService.GetAssigneesAsync(seasonId, ct));
 
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(FarmTaskResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WorkerFarmTaskResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<FarmTaskResponse>> GetAsync(Guid id, CancellationToken ct) =>
         Ok(await farmTaskService.GetAsync(id, ct));
 
     [HttpPost]
-    public async Task<ActionResult<FarmTaskResponse>> CreateAsync(
+    [ProducesResponseType(typeof(FarmTaskResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(IReadOnlyList<FarmTaskResponse>), StatusCodes.Status201Created)]
+    public async Task<ActionResult> CreateAsync(
         CreateFarmTaskRequest request,
         CancellationToken ct)
     {
+        if (request.RecurrenceIntervalDays.HasValue)
+        {
+            var createdList = await farmTaskService.CreateRecurringAsync(request, ct);
+            return StatusCode(StatusCodes.Status201Created, createdList);
+        }
+
         var created = await farmTaskService.CreateAsync(request, ct);
         return CreatedAtAction(nameof(GetAsync), new { id = created.Id }, created);
-    }
-
-    [HttpPost("recurring")]
-    public async Task<ActionResult<IReadOnlyList<FarmTaskResponse>>> CreateRecurringAsync(
-        CreateRecurringFarmTasksRequest request,
-        CancellationToken ct)
-    {
-        var created = await farmTaskService.CreateRecurringAsync(request, ct);
-        return StatusCode(StatusCodes.Status201Created, created);
     }
 
     [HttpPut("{id:guid}")]
@@ -51,15 +52,13 @@ public sealed class FarmTasksController(IFarmTaskService farmTaskService) : Cont
         Ok(await farmTaskService.UpdateAsync(id, request, ct));
 
     [HttpPost("{id:guid}/cancel")]
-    public async Task<ActionResult<FarmTaskResponse>> CancelAsync(
+    [ProducesResponseType(typeof(FarmTaskResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CancelRecurrenceGroupResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult> CancelAsync(
         Guid id,
         CancelFarmTaskRequest request,
         CancellationToken ct) =>
-        Ok(await farmTaskService.CancelAsync(id, request, ct));
-
-    [HttpPost("recurrence-groups/{recurrenceGroupId:guid}/cancel")]
-    public async Task<ActionResult<CancelRecurrenceGroupResponse>> CancelRecurrenceGroupAsync(
-        Guid recurrenceGroupId,
-        CancellationToken ct) =>
-        Ok(await farmTaskService.CancelRecurrenceGroupAsync(recurrenceGroupId, ct));
+        request.IncludeRecurrenceGroup
+            ? Ok(await farmTaskService.CancelRecurrenceGroupAsync(id, ct))
+            : Ok(await farmTaskService.CancelAsync(id, request, ct));
 }

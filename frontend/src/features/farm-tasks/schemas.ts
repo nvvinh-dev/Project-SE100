@@ -2,7 +2,6 @@ import type { UseFormSetError } from "react-hook-form";
 import { z } from "zod";
 import type {
   CreateFarmTaskRequest,
-  CreateRecurringFarmTasksRequest,
   FarmTaskResponse,
   UpdateFarmTaskRequest,
 } from "@/features/farm-tasks/types";
@@ -147,20 +146,7 @@ export function toCreateFarmTaskRequest(values: FarmTaskFormOutput): CreateFarmT
     plannedDurationMinutes: values.plannedDurationMinutes ? Number(values.plannedDurationMinutes) : null,
     note: values.note || null,
     supplies: mapPlannedSupplies(values),
-  };
-}
-
-export function toCreateRecurringFarmTasksRequest(values: FarmTaskFormOutput): CreateRecurringFarmTasksRequest {
-  return {
-    seasonId: values.seasonId,
-    type: values.type,
-    typeOther: values.type === "Other" ? values.typeOther : null,
-    firstScheduledDate: values.scheduledDate,
-    intervalDays: Number(values.intervalDays),
-    assigneeId: values.assigneeId || null,
-    plannedDurationMinutes: values.plannedDurationMinutes ? Number(values.plannedDurationMinutes) : null,
-    note: values.note || null,
-    supplies: mapPlannedSupplies(values),
+    recurrenceIntervalDays: values.isRecurring ? Number(values.intervalDays) : null,
   };
 }
 

@@ -1,9 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelFarmTask,
-  cancelRecurrenceGroup,
   createFarmTask,
-  createRecurringFarmTasks,
   getFarmTask,
   getFarmTaskAssignees,
   getFarmTasks,
@@ -12,7 +10,6 @@ import {
 import type {
   CancelFarmTaskRequest,
   CreateFarmTaskRequest,
-  CreateRecurringFarmTasksRequest,
   FarmTaskQuery,
   UpdateFarmTaskRequest,
 } from "@/features/farm-tasks/types";
@@ -61,17 +58,6 @@ export function useCreateFarmTask() {
   });
 }
 
-export function useCreateRecurringFarmTasks() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (request: CreateRecurringFarmTasksRequest) => createRecurringFarmTasks(request),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: farmTaskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
-    },
-  });
-}
-
 export function useUpdateFarmTask(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -87,18 +73,6 @@ export function useCancelFarmTask(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: CancelFarmTaskRequest) => cancelFarmTask(id, request),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(farmTaskKeys.detail(id), updated);
-      void queryClient.invalidateQueries({ queryKey: farmTaskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: seasonKeys.all });
-    },
-  });
-}
-
-export function useCancelRecurrenceGroup() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (recurrenceGroupId: string) => cancelRecurrenceGroup(recurrenceGroupId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: farmTaskKeys.all });
       void queryClient.invalidateQueries({ queryKey: seasonKeys.all });

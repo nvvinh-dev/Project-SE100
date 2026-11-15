@@ -5,12 +5,11 @@ import { PermissionGate } from "@/components/common/PermissionGate";
 import { showError, showSuccess } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
 import { FarmTaskForm } from "@/features/farm-tasks/components/FarmTaskForm";
-import { useCreateFarmTask, useCreateRecurringFarmTasks } from "@/features/farm-tasks/queries";
+import { useCreateFarmTask } from "@/features/farm-tasks/queries";
 import {
   applyFarmTaskFormServerErrors,
   getEmptyFarmTaskFormValues,
   toCreateFarmTaskRequest,
-  toCreateRecurringFarmTasksRequest,
 } from "@/features/farm-tasks/schemas";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
@@ -22,7 +21,6 @@ export function FarmTaskCreatePage() {
   const isOwner = user?.role === "Owner";
 
   const createMutation = useCreateFarmTask();
-  const createRecurringMutation = useCreateRecurringFarmTasks();
 
   const backTo = initialSeasonId ? `/seasons/${initialSeasonId}` : "/tasks";
 
@@ -48,21 +46,18 @@ export function FarmTaskCreatePage() {
         defaultValues={getEmptyFarmTaskFormValues(initialSeasonId)}
         backTo={backTo}
         submitLabel="Tạo công việc"
-        pending={createMutation.isPending || createRecurringMutation.isPending}
+        pending={createMutation.isPending}
         onSubmit={async (values, setError) => {
           try {
-            if (values.isRecurring) {
-              const createdList = await createRecurringMutation.mutateAsync(
-                toCreateRecurringFarmTasksRequest(values),
-              );
-              showSuccess(`Đã tạo ${createdList.length} công việc lặp định kỳ.`);
+            const created = await createMutation.mutateAsync(toCreateFarmTaskRequest(values));
+            if (Array.isArray(created)) {
+              showSuccess(`Đã tạo ${created.length} công việc`);
               void navigate(initialSeasonId ? `/tasks?seasonId=${initialSeasonId}` : "/tasks");
               return;
             }
 
-            const created = await createMutation.mutateAsync(toCreateFarmTaskRequest(values));
             showSuccess("Đã tạo công việc mới.");
-            void navigate(`/tasks/${created.id}`);
+            void navigate(initialSeasonId ? `/seasons/${initialSeasonId}` : `/tasks/${created.id}`);
           } catch (error) {
             if (applyFarmTaskFormServerErrors(error, setError)) {
               return;

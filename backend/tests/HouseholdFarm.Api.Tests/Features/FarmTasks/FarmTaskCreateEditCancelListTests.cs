@@ -148,18 +148,18 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
 
         var client = factory.CreateClientFor(household.Owner);
         // 2027-01-01 + 7*k: 2027-01-01, 2027-01-08, 2027-01-15 (3 công việc, tính cả 15/01)
-        var request = new CreateRecurringFarmTasksRequest(
+        var request = new CreateFarmTaskRequest(
             season.Id,
             FarmTaskType.Watering,
             null,
             new DateOnly(2027, 1, 1),
-            7,
             household.Owner.Id,
             45,
             "Tưới định kỳ",
-            [new FarmTaskPlannedSupplyInput(supply.Id, 5m)]);
+            [new FarmTaskPlannedSupplyInput(supply.Id, 5m)],
+            RecurrenceIntervalDays: 7);
 
-        var response = await client.PostAsJsonAsync($"{TasksPath}/recurring", request, FarmTaskTestData.JsonOptions, ct);
+        var response = await client.PostAsJsonAsync(TasksPath, request, FarmTaskTestData.JsonOptions, ct);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var items = (await response.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().ToList();
@@ -177,26 +177,38 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
 
         // Ngày đầu > expected_harvest_date -> VALIDATION_ERROR
         var invalidRes = await client.PostAsJsonAsync(
-            $"{TasksPath}/recurring",
-            request with { FirstScheduledDate = new DateOnly(2027, 1, 16) },
+            TasksPath,
+            request with { ScheduledDate = new DateOnly(2027, 1, 16) },
             FarmTaskTestData.JsonOptions,
             ct);
         await invalidRes.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+
+        // Chu kỳ 0 -> VALIDATION_ERROR
+        var zeroIntervalRes = await client.PostAsJsonAsync(
+            TasksPath,
+            request with { RecurrenceIntervalDays = 0 },
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await zeroIntervalRes.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
     }
 
-    [Fact(DisplayName = "FR-TSK-03, BR-TSK-01, BR-GEN-11: Sửa và hủy công việc Pending, kiểm tra xung đột version và chặn sửa việc Done")]
+    [Fact(DisplayName = "FR-TSK-03, BR-TSK-01, BR-GEN-11: Sửa và hủy công việc Pending, phân quyền Thành viên theo người tạo, mùa vụ đóng và xung đột version")]
     public async Task UpdateAndCancel_EnforceStatusAndConcurrency()
     {
         var ct = TestContext.Current.CancellationToken;
         var household = await factory.CreateHouseholdAsync(ct);
         var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
         var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+        var closedSeason = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.Closed, ct);
+        var outOfScopeSeason = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
         var supply1 = await SupplyTestData.CreateSupplyAsync(factory.Postgres, household, "VT001", ct);
         var supply2 = await SupplyTestData.CreateSupplyAsync(factory.Postgres, household, "VT002", ct);
 
         await TestData.AssignMemberAsync(factory.Postgres, household, season, household.Member, ct);
+        await TestData.AssignMemberAsync(factory.Postgres, household, closedSeason, household.Member, ct);
 
-        var pendingTask = await FarmTaskTestData.CreateTaskAsync(
+        // Công việc do Chủ hộ tạo
+        var ownerPendingTask = await FarmTaskTestData.CreateTaskAsync(
             factory.Postgres,
             household,
             season,
@@ -212,13 +224,70 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
             ct,
             status: FarmTaskStatus.Done);
 
+        var closedSeasonTask = await FarmTaskTestData.CreateTaskAsync(
+            factory.Postgres,
+            household,
+            closedSeason,
+            new DateOnly(2026, 10, 8),
+            ct);
+
+        var outOfScopeTask = await FarmTaskTestData.CreateTaskAsync(
+            factory.Postgres,
+            household,
+            outOfScopeSeason,
+            new DateOnly(2026, 10, 8),
+            ct);
+
+        var ownerClient = factory.CreateClientFor(household.Owner);
         var memberClient = factory.CreateClientFor(household.Member);
 
-        // Đọc version hiện tại
-        var detail = (await (await memberClient.GetAsync($"{TasksPath}/{pendingTask.Id}", ct)).ReadJsonAsync(ct)).GetProperty("data");
-        var version = detail.GetProperty("version").GetUInt32();
+        // Thành viên tạo công việc riêng -> có quyền tự sửa và hủy
+        var memberCreateRes = await memberClient.PostAsJsonAsync(
+            TasksPath,
+            new CreateFarmTaskRequest(
+                season.Id,
+                FarmTaskType.Weeding,
+                null,
+                new DateOnly(2026, 10, 10),
+                household.Member.Id,
+                60,
+                "Làm cỏ",
+                [new FarmTaskPlannedSupplyInput(supply1.Id, 4m)]),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        Assert.Equal(HttpStatusCode.Created, memberCreateRes.StatusCode);
+        var memberTaskData = (await memberCreateRes.ReadJsonAsync(ct)).GetProperty("data");
+        var memberTaskId = memberTaskData.GetProperty("id").GetGuid();
+        var version = memberTaskData.GetProperty("version").GetUInt32();
 
-        // Sửa công việc thành công
+        // Thành viên sửa/hủy việc do Chủ hộ tạo -> FORBIDDEN
+        var forbiddenUpdate = await memberClient.PutAsJsonAsync(
+            $"{TasksPath}/{ownerPendingTask.Id}",
+            new UpdateFarmTaskRequest(
+                FarmTaskType.Other,
+                "Tỉa cành",
+                new DateOnly(2026, 10, 12),
+                household.Member.Id,
+                120,
+                null,
+                null,
+                ownerPendingTask.Version),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await forbiddenUpdate.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
+
+        var forbiddenCancel = await memberClient.PostAsJsonAsync(
+            $"{TasksPath}/{ownerPendingTask.Id}/cancel",
+            new CancelFarmTaskRequest(ownerPendingTask.Version),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await forbiddenCancel.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
+
+        // Thành viên ngoài phạm vi mùa vụ -> NOT_FOUND
+        var notFoundRes = await memberClient.GetAsync($"{TasksPath}/{outOfScopeTask.Id}", ct);
+        await notFoundRes.AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
+
+        // Thành viên sửa công việc do mình tạo thành công
         var updateReq = new UpdateFarmTaskRequest(
             FarmTaskType.Other,
             "Tỉa cành",
@@ -228,7 +297,7 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
             "Đã đổi lịch",
             [new FarmTaskPlannedSupplyInput(supply2.Id, 8m)],
             version);
-        var updateRes = await memberClient.PutAsJsonAsync($"{TasksPath}/{pendingTask.Id}", updateReq, FarmTaskTestData.JsonOptions, ct);
+        var updateRes = await memberClient.PutAsJsonAsync($"{TasksPath}/{memberTaskId}", updateReq, FarmTaskTestData.JsonOptions, ct);
         Assert.Equal(HttpStatusCode.OK, updateRes.StatusCode);
 
         var updatedData = (await updateRes.ReadJsonAsync(ct)).GetProperty("data");
@@ -240,12 +309,12 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
         var newVersion = updatedData.GetProperty("version").GetUInt32();
 
         // Gửi lại với version cũ -> CONCURRENCY_CONFLICT
-        var staleRes = await memberClient.PutAsJsonAsync($"{TasksPath}/{pendingTask.Id}", updateReq, FarmTaskTestData.JsonOptions, ct);
+        var staleRes = await memberClient.PutAsJsonAsync($"{TasksPath}/{memberTaskId}", updateReq, FarmTaskTestData.JsonOptions, ct);
         await staleRes.AssertProblemAsync(HttpStatusCode.Conflict, ErrorCodes.ConcurrencyConflict, ct);
 
         // Hủy công việc với version mới -> Cancelled
         var cancelRes = await memberClient.PostAsJsonAsync(
-            $"{TasksPath}/{pendingTask.Id}/cancel",
+            $"{TasksPath}/{memberTaskId}/cancel",
             new CancelFarmTaskRequest(newVersion),
             FarmTaskTestData.JsonOptions,
             ct);
@@ -255,12 +324,27 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
         Assert.NotEqual(JsonValueKind.Null, cancelledData.GetProperty("cancelledAt").ValueKind);
 
         // Sửa công việc đã Done -> TASK_INVALID_STATE
-        var editDoneRes = await memberClient.PutAsJsonAsync(
+        var editDoneRes = await ownerClient.PutAsJsonAsync(
             $"{TasksPath}/{doneTask.Id}",
             updateReq with { Version = doneTask.Version },
             FarmTaskTestData.JsonOptions,
             ct);
         await editDoneRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.TaskInvalidState, ct);
+
+        // Sửa, hủy khi mùa vụ Closed -> SEASON_INVALID_STATE
+        var editClosedRes = await ownerClient.PutAsJsonAsync(
+            $"{TasksPath}/{closedSeasonTask.Id}",
+            updateReq with { Version = closedSeasonTask.Version },
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await editClosedRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
+
+        var cancelClosedRes = await ownerClient.PostAsJsonAsync(
+            $"{TasksPath}/{closedSeasonTask.Id}/cancel",
+            new CancelFarmTaskRequest(closedSeasonTask.Version),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await cancelClosedRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
     }
 
     [Fact(DisplayName = "FR-TSK-11, BR-TSK-04: Hủy nhóm lặp chỉ hủy các việc Pending/WaitingForSupply, giữ nguyên việc Done")]
@@ -281,14 +365,28 @@ public class FarmTaskCreateEditCancelListTests(ApiFactory factory) : IClassFixtu
         var waitingTask = await FarmTaskTestData.CreateTaskAsync(
             factory.Postgres, household, season, new DateOnly(2026, 10, 15), ct,
             status: FarmTaskStatus.WaitingForSupply, recurrenceGroupId: groupId);
+        var singleTask = await FarmTaskTestData.CreateTaskAsync(
+            factory.Postgres, household, season, new DateOnly(2026, 10, 16), ct);
 
         var client = factory.CreateClientFor(household.Owner);
-        var response = await client.PostAsync($"{TasksPath}/recurrence-groups/{groupId}/cancel", null, ct);
+        var response = await client.PostAsJsonAsync(
+            $"{TasksPath}/{doneTask.Id}/cancel",
+            new CancelFarmTaskRequest(doneTask.Version, IncludeRecurrenceGroup: true),
+            FarmTaskTestData.JsonOptions,
+            ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var data = (await response.ReadJsonAsync(ct)).GetProperty("data");
         Assert.Equal(groupId, data.GetProperty("recurrenceGroupId").GetGuid());
         Assert.Equal(2, data.GetProperty("cancelledCount").GetInt32());
+
+        // Hủy nhóm lặp từ việc không thuộc nhóm lặp -> TASK_INVALID_STATE
+        var nonGroupRes = await client.PostAsJsonAsync(
+            $"{TasksPath}/{singleTask.Id}/cancel",
+            new CancelFarmTaskRequest(singleTask.Version, IncludeRecurrenceGroup: true),
+            FarmTaskTestData.JsonOptions,
+            ct);
+        await nonGroupRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.TaskInvalidState, ct);
 
         await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
         var states = await db.FarmTasks

@@ -232,7 +232,10 @@ public sealed class FarmTaskService(
     {
         currentUser.EnsureNotWorker();
 
-        await seasonStateGuard.EnsureOperationAllowedAsync(request.SeasonId, SeasonOperation.ManageFarmTasks, forUpdate: false, ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // BR-GEN-12: khóa dòng mùa vụ trước khi tạo công việc để tránh chạy song song với Chốt mùa vụ.
+        await seasonStateGuard.EnsureOperationAllowedAsync(request.SeasonId, SeasonOperation.ManageFarmTasks, forUpdate: true, ct);
         await EnsureAssigneeValidAsync(request.SeasonId, request.AssigneeId, ct);
 
         var supplyInputs = NormalizeSupplyInputs(request.Supplies);
@@ -260,25 +263,28 @@ public sealed class FarmTaskService(
 
         db.FarmTasks.Add(task);
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         var loaded = await LoadTaskQuery().AsNoTracking().FirstAsync(t => t.Id == task.Id, ct);
         return await BuildOwnerOrMemberResponseAsync(loaded, clock.Today, ct);
     }
 
     public async Task<IReadOnlyList<FarmTaskResponse>> CreateRecurringAsync(
-        CreateRecurringFarmTasksRequest request,
+        CreateFarmTaskRequest request,
         CancellationToken ct)
     {
         currentUser.EnsureNotWorker();
 
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
         var season = await seasonStateGuard.EnsureOperationAllowedAsync(
             request.SeasonId,
             SeasonOperation.ManageFarmTasks,
-            forUpdate: false,
+            forUpdate: true,
             ct);
 
-        var firstDate = request.FirstScheduledDate!.Value;
-        var intervalDays = request.IntervalDays!.Value;
+        var firstDate = request.ScheduledDate!.Value;
+        var intervalDays = request.RecurrenceIntervalDays!.Value;
 
         // BR-TSK-03: ngày đầu tiên phải nhỏ hơn hoặc bằng ngày dự kiến thu hoạch của mùa vụ.
         if (firstDate > season.ExpectedHarvestDate)
@@ -325,6 +331,7 @@ public sealed class FarmTaskService(
 
         db.FarmTasks.AddRange(createdTasks);
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         var createdIds = createdTasks.Select(t => t.Id).ToList();
         var loaded = await LoadTaskQuery()
@@ -352,11 +359,25 @@ public sealed class FarmTaskService(
     {
         currentUser.EnsureNotWorker();
 
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var seasonId = await db.FarmTasks
+            .AsNoTracking()
+            .VisibleTo(currentUser)
+            .Where(t => t.Id == id)
+            .Select(t => (Guid?)t.SeasonId)
+            .FirstOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("công việc");
+
+        await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.ManageFarmTasks, forUpdate: true, ct);
+
         var task = await db.FarmTasks
             .VisibleTo(currentUser)
             .Include(t => t.SupplyUsages)
             .FirstOrDefaultAsync(t => t.Id == id, ct)
             ?? throw AppException.NotFound("công việc");
+
+        EnsureCanManageTaskByCreator(task, "sửa");
 
         // BR-TSK-01: chỉ sửa khi công việc đang Chưa làm hoặc Chờ bổ sung vật tư.
         if (task.Status is not (FarmTaskStatus.Pending or FarmTaskStatus.WaitingForSupply))
@@ -366,12 +387,25 @@ public sealed class FarmTaskService(
                 "Chỉ sửa được công việc đang ở trạng thái Chưa làm hoặc Chờ bổ sung vật tư.");
         }
 
-        await seasonStateGuard.EnsureOperationAllowedAsync(task.SeasonId, SeasonOperation.ManageFarmTasks, forUpdate: false, ct);
         await EnsureAssigneeValidAsync(task.SeasonId, request.AssigneeId, ct);
 
         var supplyInputs = NormalizeSupplyInputs(request.Supplies);
         var existingSupplyIds = task.SupplyUsages.Select(u => u.SupplyId).ToHashSet();
         await EnsurePlannedSuppliesValidAsync(supplyInputs.Select(s => s.SupplyId), existingSupplyIds, ct);
+
+        var desiredBySupply = supplyInputs.ToDictionary(s => s.SupplyId, s => s.PlannedQuantity);
+
+        // Chốt chặn không xóa/đổi dòng vật tư đã gắn giao dịch xuất kho còn hiệu lực để giữ liên kết cho BR-TSK-10, BR-TSK-11.
+        foreach (var issuedUsage in task.SupplyUsages.Where(u => u.StockTransactionId.HasValue))
+        {
+            if (!desiredBySupply.TryGetValue(issuedUsage.SupplyId, out var desiredPlanned)
+                || desiredPlanned != issuedUsage.PlannedQuantity)
+            {
+                throw new AppException(
+                    ErrorCodes.TaskInvalidState,
+                    "Không thể xóa hoặc sửa dòng vật tư đã gắn giao dịch xuất kho tại đây. Vui lòng cập nhật qua ghi kết quả công việc.");
+            }
+        }
 
         // BR-GEN-11: kiểm soát xung đột cập nhật đồng thời bằng xmin.
         db.Entry(task).Property(t => t.Version).OriginalValue = request.Version;
@@ -384,11 +418,12 @@ public sealed class FarmTaskService(
         task.PlannedDurationMinutes = request.PlannedDurationMinutes;
         task.Note = TrimToNull(request.Note);
 
-        var desiredBySupply = supplyInputs.ToDictionary(s => s.SupplyId, s => s.PlannedQuantity);
         var existingBySupply = task.SupplyUsages.ToDictionary(u => u.SupplyId);
 
-        // Xóa các dòng vật tư dự kiến không còn nằm trong danh sách mới.
-        foreach (var existing in task.SupplyUsages.Where(u => !desiredBySupply.ContainsKey(u.SupplyId)).ToList())
+        // Xóa các dòng vật tư dự kiến chưa gắn giao dịch xuất không còn nằm trong danh sách mới.
+        foreach (var existing in task.SupplyUsages
+                     .Where(u => !u.StockTransactionId.HasValue && !desiredBySupply.ContainsKey(u.SupplyId))
+                     .ToList())
         {
             db.FarmTaskSupplyUsages.Remove(existing);
         }
@@ -398,7 +433,10 @@ public sealed class FarmTaskService(
         {
             if (existingBySupply.TryGetValue(input.SupplyId, out var existing))
             {
-                existing.PlannedQuantity = input.PlannedQuantity;
+                if (!existing.StockTransactionId.HasValue)
+                {
+                    existing.PlannedQuantity = input.PlannedQuantity;
+                }
             }
             else
             {
@@ -412,6 +450,7 @@ public sealed class FarmTaskService(
         }
 
         await SaveWithConcurrencyCheckAsync(ct);
+        await tx.CommitAsync(ct);
 
         var loaded = await LoadTaskQuery().AsNoTracking().FirstAsync(t => t.Id == task.Id, ct);
         return await BuildOwnerOrMemberResponseAsync(loaded, clock.Today, ct);
@@ -421,10 +460,24 @@ public sealed class FarmTaskService(
     {
         currentUser.EnsureNotWorker();
 
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var seasonId = await db.FarmTasks
+            .AsNoTracking()
+            .VisibleTo(currentUser)
+            .Where(t => t.Id == id)
+            .Select(t => (Guid?)t.SeasonId)
+            .FirstOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("công việc");
+
+        await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.ManageFarmTasks, forUpdate: true, ct);
+
         var task = await db.FarmTasks
             .VisibleTo(currentUser)
             .FirstOrDefaultAsync(t => t.Id == id, ct)
             ?? throw AppException.NotFound("công việc");
+
+        EnsureCanManageTaskByCreator(task, "hủy");
 
         // BR-TSK-01: chỉ hủy khi công việc đang Chưa làm hoặc Chờ bổ sung vật tư.
         if (task.Status is not (FarmTaskStatus.Pending or FarmTaskStatus.WaitingForSupply))
@@ -434,35 +487,52 @@ public sealed class FarmTaskService(
                 "Chỉ hủy được công việc đang ở trạng thái Chưa làm hoặc Chờ bổ sung vật tư.");
         }
 
-        await seasonStateGuard.EnsureOperationAllowedAsync(task.SeasonId, SeasonOperation.ManageFarmTasks, forUpdate: false, ct);
-
         db.Entry(task).Property(t => t.Version).OriginalValue = request.Version;
 
         task.Status = FarmTaskStatus.Cancelled;
         task.CancelledAt = clock.UtcNow;
 
         await SaveWithConcurrencyCheckAsync(ct);
+        await tx.CommitAsync(ct);
 
         var loaded = await LoadTaskQuery().AsNoTracking().FirstAsync(t => t.Id == task.Id, ct);
         return await BuildOwnerOrMemberResponseAsync(loaded, clock.Today, ct);
     }
 
-    public async Task<CancelRecurrenceGroupResponse> CancelRecurrenceGroupAsync(Guid recurrenceGroupId, CancellationToken ct)
+    public async Task<CancelRecurrenceGroupResponse> CancelRecurrenceGroupAsync(Guid id, CancellationToken ct)
     {
         currentUser.EnsureNotWorker();
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var anchor = await db.FarmTasks
+            .AsNoTracking()
+            .VisibleTo(currentUser)
+            .Where(t => t.Id == id)
+            .Select(t => new { t.Id, t.SeasonId, t.RecurrenceGroupId, t.CreatedById })
+            .FirstOrDefaultAsync(ct)
+            ?? throw AppException.NotFound("công việc");
+
+        if (currentUser.Role == UserRole.Member && anchor.CreatedById != currentUser.UserId)
+        {
+            throw new AppException(
+                ErrorCodes.Forbidden,
+                "Thành viên hộ chỉ được hủy nhóm công việc lặp do mình tạo.");
+        }
+
+        if (anchor.RecurrenceGroupId is not { } recurrenceGroupId)
+        {
+            throw new AppException(
+                ErrorCodes.TaskInvalidState,
+                "Công việc này không thuộc nhóm công việc lặp nào.");
+        }
+
+        await seasonStateGuard.EnsureOperationAllowedAsync(anchor.SeasonId, SeasonOperation.ManageFarmTasks, forUpdate: true, ct);
 
         var groupTasks = await db.FarmTasks
             .VisibleTo(currentUser)
             .Where(t => t.RecurrenceGroupId == recurrenceGroupId)
             .ToListAsync(ct);
-
-        if (groupTasks.Count == 0)
-        {
-            throw AppException.NotFound("nhóm công việc lặp");
-        }
-
-        var seasonId = groupTasks[0].SeasonId;
-        await seasonStateGuard.EnsureOperationAllowedAsync(seasonId, SeasonOperation.ManageFarmTasks, forUpdate: false, ct);
 
         // BR-TSK-04: chỉ hủy các công việc còn Pending hoặc WaitingForSupply, giữ nguyên công việc Done và Cancelled.
         var cancellableTasks = groupTasks
@@ -484,8 +554,19 @@ public sealed class FarmTaskService(
         }
 
         await SaveWithConcurrencyCheckAsync(ct);
+        await tx.CommitAsync(ct);
 
         return new CancelRecurrenceGroupResponse(recurrenceGroupId, cancellableTasks.Count);
+    }
+
+    private void EnsureCanManageTaskByCreator(FarmTask task, string actionLabel)
+    {
+        if (currentUser.Role == UserRole.Member && task.CreatedById != currentUser.UserId)
+        {
+            throw new AppException(
+                ErrorCodes.Forbidden,
+                $"Thành viên hộ chỉ được {actionLabel} công việc do mình tạo.");
+        }
     }
 
     private IQueryable<FarmTask> LoadTaskQuery() => db.FarmTasks

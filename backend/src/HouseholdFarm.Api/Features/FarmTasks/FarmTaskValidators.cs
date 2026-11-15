@@ -45,57 +45,12 @@ public sealed class CreateFarmTaskRequestValidator : AbstractValidator<CreateFar
         RuleFor(r => r.ScheduledDate)
             .NotNull().WithMessage("Vui lòng chọn ngày dự kiến.");
 
-        When(r => r.PlannedDurationMinutes.HasValue, () =>
+        // BR-TSK-03: nếu tạo công việc lặp thì chu kỳ tối thiểu 1 ngày.
+        When(r => r.RecurrenceIntervalDays.HasValue, () =>
         {
-            RuleFor(r => r.PlannedDurationMinutes!.Value)
-                .GreaterThan(0).WithMessage("Thời lượng dự kiến phải lớn hơn 0 phút.");
+            RuleFor(r => r.RecurrenceIntervalDays!.Value)
+                .GreaterThanOrEqualTo(1).WithMessage("Chu kỳ lặp phải tối thiểu 1 ngày.");
         });
-
-        RuleFor(r => r.Note)
-            .MaximumLength(2000).WithMessage("Ghi chú tối đa 2000 ký tự.");
-
-        RuleForEach(r => r.Supplies!)
-            .SetValidator(new FarmTaskPlannedSupplyInputValidator())
-            .When(r => r.Supplies is not null);
-
-        RuleFor(r => r.Supplies)
-            .Must(supplies => supplies is null || supplies
-                .Where(s => s.SupplyId.HasValue && s.SupplyId.Value != Guid.Empty)
-                .Select(s => s.SupplyId!.Value)
-                .Distinct()
-                .Count() == supplies.Count(s => s.SupplyId.HasValue && s.SupplyId.Value != Guid.Empty))
-            .WithMessage("Mỗi vật tư chỉ được khai báo một dòng trong công việc.");
-    }
-}
-
-public sealed class CreateRecurringFarmTasksRequestValidator : AbstractValidator<CreateRecurringFarmTasksRequest>
-{
-    public CreateRecurringFarmTasksRequestValidator()
-    {
-        RuleFor(r => r.SeasonId)
-            .NotEmpty().WithMessage("Vui lòng chọn mùa vụ.");
-
-        RuleFor(r => r.Type)
-            .Cascade(CascadeMode.Stop)
-            .NotNull().WithMessage("Vui lòng chọn loại công việc.")
-            .IsInEnum().WithMessage("Loại công việc không hợp lệ.");
-
-        RuleFor(r => r.TypeOther)
-            .MaximumLength(200).WithMessage("Tên loại công việc tối đa 200 ký tự.");
-
-        When(r => r.Type == FarmTaskType.Other, () =>
-        {
-            RuleFor(r => r.TypeOther)
-                .NotEmpty().WithMessage("Vui lòng nhập tên loại công việc.");
-        });
-
-        RuleFor(r => r.FirstScheduledDate)
-            .NotNull().WithMessage("Vui lòng chọn ngày bắt đầu lặp.");
-
-        RuleFor(r => r.IntervalDays)
-            .Cascade(CascadeMode.Stop)
-            .NotNull().WithMessage("Vui lòng nhập chu kỳ lặp.")
-            .GreaterThanOrEqualTo(1).WithMessage("Chu kỳ lặp phải tối thiểu 1 ngày.");
 
         When(r => r.PlannedDurationMinutes.HasValue, () =>
         {

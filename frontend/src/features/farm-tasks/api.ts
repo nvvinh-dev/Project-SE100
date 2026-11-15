@@ -2,7 +2,6 @@ import type {
   CancelFarmTaskRequest,
   CancelRecurrenceGroupResponse,
   CreateFarmTaskRequest,
-  CreateRecurringFarmTasksRequest,
   FarmTaskAssigneeOption,
   FarmTaskDetail,
   FarmTaskListItem,
@@ -39,13 +38,8 @@ export async function getFarmTask(id: string): Promise<FarmTaskDetail> {
   return response.data.data;
 }
 
-export async function createFarmTask(request: CreateFarmTaskRequest): Promise<FarmTaskResponse> {
-  const response = await apiClient.post<ResponseEnvelope<FarmTaskResponse>>("/farm-tasks", request);
-  return response.data.data;
-}
-
-export async function createRecurringFarmTasks(request: CreateRecurringFarmTasksRequest): Promise<FarmTaskResponse[]> {
-  const response = await apiClient.post<ResponseEnvelope<FarmTaskResponse[]>>("/farm-tasks/recurring", request);
+export async function createFarmTask(request: CreateFarmTaskRequest): Promise<FarmTaskResponse | FarmTaskResponse[]> {
+  const response = await apiClient.post<ResponseEnvelope<FarmTaskResponse | FarmTaskResponse[]>>("/farm-tasks", request);
   return response.data.data;
 }
 
@@ -54,14 +48,13 @@ export async function updateFarmTask(id: string, request: UpdateFarmTaskRequest)
   return response.data.data;
 }
 
-export async function cancelFarmTask(id: string, request: CancelFarmTaskRequest): Promise<FarmTaskResponse> {
-  const response = await apiClient.post<ResponseEnvelope<FarmTaskResponse>>(`/farm-tasks/${id}/cancel`, request);
-  return response.data.data;
-}
-
-export async function cancelRecurrenceGroup(recurrenceGroupId: string): Promise<CancelRecurrenceGroupResponse> {
-  const response = await apiClient.post<ResponseEnvelope<CancelRecurrenceGroupResponse>>(
-    `/farm-tasks/recurrence-groups/${recurrenceGroupId}/cancel`,
+export async function cancelFarmTask(
+  id: string,
+  request: CancelFarmTaskRequest,
+): Promise<FarmTaskResponse | CancelRecurrenceGroupResponse> {
+  const response = await apiClient.post<ResponseEnvelope<FarmTaskResponse | CancelRecurrenceGroupResponse>>(
+    `/farm-tasks/${id}/cancel`,
+    request,
   );
   return response.data.data;
 }

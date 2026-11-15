@@ -20,18 +20,7 @@ export interface CreateFarmTaskRequest {
   plannedDurationMinutes: number | null;
   note: string | null;
   supplies: FarmTaskPlannedSupplyInput[];
-}
-
-export interface CreateRecurringFarmTasksRequest {
-  seasonId: string;
-  type: FarmTaskType;
-  typeOther: string | null;
-  firstScheduledDate: string;
-  intervalDays: number;
-  assigneeId: string | null;
-  plannedDurationMinutes: number | null;
-  note: string | null;
-  supplies: FarmTaskPlannedSupplyInput[];
+  recurrenceIntervalDays?: number | null;
 }
 
 export interface UpdateFarmTaskRequest {
@@ -47,6 +36,7 @@ export interface UpdateFarmTaskRequest {
 
 export interface CancelFarmTaskRequest {
   version: number;
+  includeRecurrenceGroup?: boolean;
 }
 
 export interface CancelRecurrenceGroupResponse {

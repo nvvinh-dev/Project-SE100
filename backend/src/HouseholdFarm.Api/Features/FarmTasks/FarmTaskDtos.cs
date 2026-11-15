@@ -14,7 +14,7 @@ public sealed record FarmTaskPlannedSupplyInput(
     Guid? SupplyId,
     decimal? PlannedQuantity);
 
-/// <summary>Tạo một công việc canh tác đơn lẻ (FR-TSK-01, FR-SEA-05). Công việc mới luôn ở trạng thái Pending.</summary>
+/// <summary>Tạo công việc canh tác đơn lẻ hoặc nhóm lặp theo chu kỳ cố định (FR-TSK-01, FR-TSK-02, FR-SEA-05). Công việc mới luôn ở trạng thái Pending.</summary>
 public sealed record CreateFarmTaskRequest(
     Guid SeasonId,
     FarmTaskType? Type,
@@ -23,19 +23,8 @@ public sealed record CreateFarmTaskRequest(
     Guid? AssigneeId,
     int? PlannedDurationMinutes,
     string? Note,
-    IReadOnlyList<FarmTaskPlannedSupplyInput>? Supplies);
-
-/// <summary>Tạo nhóm công việc lặp theo chu kỳ cố định đến hết ngày dự kiến thu hoạch của mùa vụ (FR-TSK-02, BR-TSK-03).</summary>
-public sealed record CreateRecurringFarmTasksRequest(
-    Guid SeasonId,
-    FarmTaskType? Type,
-    string? TypeOther,
-    DateOnly? FirstScheduledDate,
-    int? IntervalDays,
-    Guid? AssigneeId,
-    int? PlannedDurationMinutes,
-    string? Note,
-    IReadOnlyList<FarmTaskPlannedSupplyInput>? Supplies);
+    IReadOnlyList<FarmTaskPlannedSupplyInput>? Supplies,
+    int? RecurrenceIntervalDays = null);
 
 /// <summary>Sửa công việc khi chưa thực hiện (FR-TSK-03, BR-TSK-01).</summary>
 public sealed record UpdateFarmTaskRequest(
@@ -48,8 +37,10 @@ public sealed record UpdateFarmTaskRequest(
     IReadOnlyList<FarmTaskPlannedSupplyInput>? Supplies,
     uint Version);
 
-/// <summary>Hủy một công việc khi chưa thực hiện (FR-TSK-03, BR-TSK-01).</summary>
-public sealed record CancelFarmTaskRequest(uint Version);
+/// <summary>Hủy một công việc hoặc toàn bộ công việc chưa làm trong nhóm lặp (FR-TSK-03, FR-TSK-11, BR-TSK-01, BR-TSK-04).</summary>
+public sealed record CancelFarmTaskRequest(
+    uint Version,
+    bool IncludeRecurrenceGroup = false);
 
 /// <summary>Kết quả hủy nhóm công việc lặp (FR-TSK-11, BR-TSK-04).</summary>
 public sealed record CancelRecurrenceGroupResponse(
