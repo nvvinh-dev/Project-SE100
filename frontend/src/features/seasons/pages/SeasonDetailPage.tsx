@@ -2,7 +2,6 @@ import {
   CalendarIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
-  FileTextIcon,
   MoreVerticalIcon,
   PlayIcon,
   PlusIcon,
@@ -38,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FarmTaskListSection } from "@/features/farm-tasks/components/FarmTaskListSection";
+import { HarvestListSection } from "@/features/harvests/components/HarvestListSection";
 import { SeasonNotesTab } from "@/features/seasons/components/SeasonNotesTab";
 import {
   useCancelSeason,
@@ -47,6 +47,7 @@ import {
   useStartSeason,
 } from "@/features/seasons/queries";
 import { ApiError, type ConfirmationItem, getConfirmationItems } from "@/lib/api-error";
+import { ACCESS, canAccess } from "@/lib/auth/access";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 type TabKey = "overview" | "tasks" | "harvests" | "finance" | "notes";
@@ -266,6 +267,12 @@ export function SeasonDetailPage() {
             </span>
             <span>
               Đã thu: <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> ({progressPercent}%)
+              {season.harvestedYield > 0 && season.targetYield > 0 && (
+                <span className="ml-1 text-muted-foreground">
+                  (Chênh lệch {season.yieldDeviation > 0 ? "+" : ""}
+                  {season.yieldDeviation}%)
+                </span>
+              )}
             </span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary">
@@ -485,7 +492,7 @@ export function SeasonDetailPage() {
                         <span className="font-semibold">
                           <QuantityText value={stock.quantity} unit={stock.unit} />
                         </span>
-                        {stock.quantity > 0 && (
+                        {stock.quantity > 0 && user && canAccess(user, ACCESS.financeManager) && (
                           <Button size="sm" variant="outline" asChild className="h-7 text-xs">
                             <Link to={`/sales/new?seasonId=${id}&grade=${stock.grade}`}>Bán</Link>
                           </Button>
@@ -578,24 +585,20 @@ export function SeasonDetailPage() {
       {/* Tab Thu hoạch */}
       {activeTab === "harvests" && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold">Phiếu thu hoạch</span>
-            <Button size="sm" asChild>
-              <Link to={`/harvests/new?seasonId=${id}`}>
-                <PlusIcon className="mr-1.5 h-4 w-4" /> Thu hoạch
-              </Link>
-            </Button>
-          </div>
-          <div className="rounded-lg border bg-card p-6 text-center space-y-2">
-            <FileTextIcon className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">
               Tổng sản lượng đã thu:{" "}
               <QuantityText value={season.harvestedYield} unit={season.yieldUnit} />
-            </p>
-            <Button variant="outline" asChild>
-              <Link to={`/harvests?seasonId=${id}`}>Mở trang danh sách thu hoạch</Link>
-            </Button>
+            </span>
+            {!season.isOutOfScope && season.status === "InProgress" && (
+              <Button size="sm" asChild>
+                <Link to={`/harvests/new?seasonId=${id}`}>
+                  <PlusIcon className="mr-1.5 h-4 w-4" /> Thu hoạch
+                </Link>
+              </Button>
+            )}
           </div>
+          <HarvestListSection fixedSeasonId={id} />
         </div>
       )}
 

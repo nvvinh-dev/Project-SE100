@@ -132,7 +132,11 @@ public sealed record SeasonListItem(
     DateOnly StartDate,
     DateOnly ExpectedHarvestDate,
     decimal TargetYield,
-    SeasonStatus Status);
+    SeasonStatus Status,
+    decimal HarvestedYield,
+    decimal YieldDeviation,
+    int CompletedTasksCount,
+    int TotalTasksCount);
 
 /// <summary>
 /// Tham số truy vấn danh sách mùa vụ (FR-SEA-11).
@@ -222,6 +226,7 @@ public sealed record SeasonDetailResponse(
     string? CancelReason,
     uint Version,
     decimal HarvestedYield,
+    decimal YieldDeviation,
     int CompletedTasksCount,
     int TotalTasksCount,
     IReadOnlyList<ProduceStockSummaryItem> ProduceStocks,

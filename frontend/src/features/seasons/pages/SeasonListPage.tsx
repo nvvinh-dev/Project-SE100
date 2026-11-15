@@ -248,7 +248,13 @@ export function SeasonListPage() {
                   <DateText value={season.startDate} /> → <DateText value={season.expectedHarvestDate} />
                 </div>
                 <div>
-                  0 / <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                  <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> /{" "}
+                  <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                  {season.harvestedYield > 0 && season.targetYield > 0 && (
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      ({formatYieldDeviation(season.yieldDeviation)})
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -270,7 +276,13 @@ export function SeasonListPage() {
                 header: "Sản lượng",
                 cell: (season) => (
                   <span>
-                    0 / <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                    <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> /{" "}
+                    <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                    {season.harvestedYield > 0 && season.targetYield > 0 && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        ({formatYieldDeviation(season.yieldDeviation)})
+                      </span>
+                    )}
                   </span>
                 ),
                 className: "text-right",
@@ -316,4 +328,10 @@ function matchPattern(value: string | null, pattern: RegExp): string | undefined
 
 function pick<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
   return allowed.find((item) => item === value);
+}
+
+const deviationFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1, signDisplay: "exceptZero" });
+
+function formatYieldDeviation(value: number): string {
+  return `${deviationFormat.format(value)}%`;
 }
