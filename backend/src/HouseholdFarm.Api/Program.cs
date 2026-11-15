@@ -92,6 +92,7 @@ builder.Services.AddScoped<ICrossHouseholdAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IStockService, StockService>();
 builder.Services.AddScoped<ISaleHarvestLinkService, SaleHarvestLinkService>();
 builder.Services.AddScoped<ISeasonFinanceService, SeasonFinanceService>();
+builder.Services.AddScoped<IFinanceReportService, FinanceReportService>();
 builder.Services.AddScoped<IProduceStockService, ProduceStockService>();
 builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 
