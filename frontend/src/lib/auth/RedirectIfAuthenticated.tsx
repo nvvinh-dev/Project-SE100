@@ -7,15 +7,15 @@ import { readLoginLocationState } from "@/lib/auth/login-location-state";
 import type { CurrentUserResponse } from "@/lib/auth/types";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
-/**
- * Bọc `/login`, `/register`. Đã đăng nhập thì chuyển đi: về trang đang mở trước khi bị đưa tới đăng nhập,
- * nếu không có thì về trang đầu theo vai trò. Đăng nhập xong cũng đi đường này.
- */
 interface RedirectIfAuthenticatedProps {
   /** Vai trò vừa đăng nhập có được mở đường dẫn đã nhớ không; không được thì về trang đầu theo vai trò. */
   canOpen: (path: string, user: CurrentUserResponse) => boolean;
 }
 
+/**
+ * Bọc `/login`, `/register`. Đã đăng nhập thì chuyển đi: về trang đang mở trước khi bị đưa tới đăng nhập,
+ * nếu không có thì về trang đầu theo vai trò. Đăng nhập xong cũng đi đường này.
+ */
 export function RedirectIfAuthenticated({ canOpen }: RedirectIfAuthenticatedProps) {
   const { status } = useAuth();
   const location = useLocation();
