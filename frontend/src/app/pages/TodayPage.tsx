@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { CircleCheckIcon, CircleIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { Link, Navigate } from "react-router";
+import { ErrorAlert } from "@/components/common/ErrorAlert";
+import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { apiClient, type ResponseEnvelope } from "@/lib/api-client";
@@ -69,8 +71,34 @@ function GettingStarted() {
   // Nằm dưới plotKeys.all ("plots") nên tạo thửa xong thì tự làm mới.
   const plotCount = useQuery({ queryKey: ["plots", "count"], queryFn: getPlotCount });
 
+  const header = (
+    <div>
+      <h2 className="font-semibold">Bắt đầu</h2>
+      <p className="text-sm text-muted-foreground">Ba bước để bắt đầu ghi chép mùa vụ đầu tiên.</p>
+    </div>
+  );
+
+  // Chưa biết hộ có thửa hay chưa thì không hiện nút "Tạo thửa đất": hộ đã có thửa sẽ thấy nút sai trong lúc chờ.
+  if (plotCount.isPending) {
+    return (
+      <section className="flex flex-col gap-3 rounded-lg border p-4">
+        {header}
+        <LoadingState rows={3} />
+      </section>
+    );
+  }
+
+  if (plotCount.isError) {
+    return (
+      <section className="flex flex-col gap-3 rounded-lg border p-4">
+        {header}
+        <ErrorAlert error={plotCount.error} onRetry={() => void plotCount.refetch()} />
+      </section>
+    );
+  }
+
   const steps = [
-    { name: "Thửa đất", action: "Tạo thửa đất", to: "/plots/new", done: (plotCount.data ?? 0) > 0 },
+    { name: "Thửa đất", action: "Tạo thửa đất", to: "/plots/new", done: plotCount.data > 0 },
     { name: "Cây trồng", action: "Tạo cây trồng", to: "/crops/new", done: false },
     { name: "Mùa vụ", action: "Tạo mùa vụ", to: "/seasons/new", done: false },
   ];
@@ -81,10 +109,7 @@ function GettingStarted() {
 
   return (
     <section className="flex flex-col gap-3 rounded-lg border p-4">
-      <div>
-        <h2 className="font-semibold">Bắt đầu</h2>
-        <p className="text-sm text-muted-foreground">Ba bước để bắt đầu ghi chép mùa vụ đầu tiên.</p>
-      </div>
+      {header}
       <ol className="flex flex-col gap-2">
         {steps.map((step, index) => (
           <li key={step.to} className="flex min-h-11 items-center gap-3">
