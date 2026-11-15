@@ -13,6 +13,7 @@ import { householdRoutes } from "@/features/households/routes";
 import { cropRoutes } from "@/features/crops/routes";
 import { farmTaskRoutes } from "@/features/farm-tasks/routes";
 import { plotRoutes } from "@/features/plots/routes";
+import { reportRoutes } from "@/features/reports/routes";
 import { salesRoutes } from "@/features/sales/routes";
 import { seasonRoutes } from "@/features/seasons/routes";
 import { supplyRoutes } from "@/features/supplies/routes";
@@ -48,6 +49,7 @@ const routes: RouteObject[] = [
           ...supplyRoutes,
           ...expenseRoutes,
           ...salesRoutes,
+          ...reportRoutes,
           { path: "*", element: <NotFoundPage /> },
         ],
       },
