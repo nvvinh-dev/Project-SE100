@@ -61,11 +61,18 @@ public static class FarmTaskTestData
         return task;
     }
 
-    public sealed class FixedClockFactory(PostgresFixture postgres, DateTimeOffset utcNow) : ApiFactory(postgres)
+    public sealed class FixedClockFactory(
+        PostgresFixture postgres,
+        DateTimeOffset utcNow,
+        int? upcomingDays = null) : ApiFactory(postgres)
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
+            if (upcomingDays.HasValue)
+            {
+                builder.UseSetting("Reminders:UpcomingDays", upcomingDays.Value.ToString());
+            }
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IAppClock>(TestClock.At(utcNow));

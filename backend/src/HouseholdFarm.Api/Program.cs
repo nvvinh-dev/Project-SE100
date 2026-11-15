@@ -17,9 +17,10 @@ using HouseholdFarm.Api.Features.Auth;
 using HouseholdFarm.Api.Features.Crops;
 using HouseholdFarm.Api.Features.Expenses;
 using HouseholdFarm.Api.Features.FarmTasks;
-using HouseholdFarm.Api.Features.Plots;
 using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Households;
+using HouseholdFarm.Api.Features.Plots;
+using HouseholdFarm.Api.Features.Reports.Common;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Sales;
 using HouseholdFarm.Api.Features.Seasons;
@@ -112,6 +113,9 @@ builder.Services.AddScoped<StockOperations>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IReportAccessService, ReportAccessService>();
+builder.Services.AddSingleton<ExcelReportWriter>();
+builder.Services.AddScoped<IReportExportService, ReportExportService>();
 
 builder.Services.AddScoped<DevDataSeeder>();
 

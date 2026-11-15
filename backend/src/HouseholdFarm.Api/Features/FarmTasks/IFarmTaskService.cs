@@ -7,6 +7,9 @@ public interface IFarmTaskService
     /// <summary>Lấy danh sách công việc theo phạm vi làm việc và bộ lọc (FR-TSK-09, FR-TSK-10).</summary>
     Task<PagedResult<FarmTaskListItem>> GetListAsync(FarmTaskQuery query, CancellationToken ct);
 
+    /// <summary>Lấy các nhóm nhắc việc Trễ hạn, Hôm nay, Sắp tới theo giờ Việt Nam (FR-TSK-08, BR-TSK-12).</summary>
+    Task<FarmTaskRemindersResponse> GetRemindersAsync(bool mine, CancellationToken ct);
+
     /// <summary>Lấy danh sách người có thể được giao việc (FR-TSK-01, BR-TSK-02).</summary>
     Task<IReadOnlyList<FarmTaskAssigneeOption>> GetAssigneesAsync(Guid? seasonId, CancellationToken ct);
 
