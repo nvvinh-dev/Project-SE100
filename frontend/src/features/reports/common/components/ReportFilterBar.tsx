@@ -1,3 +1,4 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ListFilterIcon, RotateCcwIcon, XIcon } from "lucide-react";
 import { type ReactNode, useState, useSyncExternalStore } from "react";
 import type { ActiveFilter } from "@/components/common/SearchFilterBar";
@@ -5,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { useCrops } from "@/features/crops/queries";
-import { usePlots } from "@/features/plots/queries";
+import { getCrops } from "@/features/crops/api";
+import { cropKeys } from "@/features/crops/queries";
+import { getPlots } from "@/features/plots/api";
+import { plotKeys } from "@/features/plots/queries";
 import type { ReportFilter } from "@/features/reports/common/types";
+import { getSeasonOptions } from "@/features/seasons/api";
 import { SeasonSelect } from "@/features/seasons/components/SeasonSelect";
-import { useSeasonOptions } from "@/features/seasons/queries";
+import { seasonKeys } from "@/features/seasons/queries";
 import type { ExtraPermission } from "@/lib/enums";
 import { formatDate } from "@/lib/format";
 
@@ -62,9 +66,28 @@ export function ReportFilterBar({
   const hasPlotField = fields.includes("plot");
   const hasCropField = fields.includes("crop");
 
-  const plotsQuery = usePlots({ page: 1, pageSize: OPTION_PAGE_SIZE });
-  const cropsQuery = useCrops({ page: 1, pageSize: OPTION_PAGE_SIZE });
-  const seasonsQuery = useSeasonOptions({ permission: seasonPermission });
+  const plotOptionQuery = { page: 1, pageSize: OPTION_PAGE_SIZE };
+  const cropOptionQuery = { page: 1, pageSize: OPTION_PAGE_SIZE };
+  const seasonOptionQuery = { permission: seasonPermission };
+
+  // Chỉ gọi API danh mục khi thanh lọc thực sự hiển thị trường tương ứng.
+  const plotsQuery = useQuery({
+    queryKey: plotKeys.list(plotOptionQuery),
+    queryFn: () => getPlots(plotOptionQuery),
+    enabled: hasPlotField,
+    placeholderData: keepPreviousData,
+  });
+  const cropsQuery = useQuery({
+    queryKey: cropKeys.list(cropOptionQuery),
+    queryFn: () => getCrops(cropOptionQuery),
+    enabled: hasCropField,
+    placeholderData: keepPreviousData,
+  });
+  const seasonsQuery = useQuery({
+    queryKey: seasonKeys.options(seasonOptionQuery),
+    queryFn: () => getSeasonOptions(seasonOptionQuery),
+    enabled: hasSeasonField,
+  });
 
   const plots = hasPlotField ? (plotsQuery.data?.items ?? []) : [];
   const crops = hasCropField ? (cropsQuery.data?.items ?? []) : [];

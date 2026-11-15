@@ -81,16 +81,14 @@ export async function downloadReportFile(
   const fileName = parseContentDispositionFileName(contentDisposition, fallbackName);
 
   const objectUrl = URL.createObjectURL(response.data);
-  try {
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Trì hoãn thu hồi URL để Firefox/Safari kịp bắt đầu tải tệp trước khi giải phóng Blob URL.
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 
   return { fileName };
 }

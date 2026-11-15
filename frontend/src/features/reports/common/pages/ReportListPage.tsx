@@ -8,6 +8,7 @@ import {
 import { Link } from "react-router";
 import { EmptyState } from "@/components/common/EmptyState";
 import { PageHeader } from "@/components/common/PageHeader";
+import { Badge } from "@/components/ui/badge";
 import { ACCESS, visibleTo } from "@/lib/auth/access";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { reportTypeLabels } from "@/lib/enum-labels";
@@ -19,6 +20,7 @@ const reportCards = [
     description: "Sản lượng thực tế, độ lệch mục tiêu, năng suất và so với mùa trước.",
     icon: SproutIcon,
     access: ACCESS.household,
+    available: false,
   },
   {
     type: "FarmTask" as const,
@@ -26,6 +28,7 @@ const reportCards = [
     description: "Thống kê công việc đã lập, hoàn thành, trễ hạn để điều phối công việc.",
     icon: ClipboardCheckIcon,
     access: ACCESS.household,
+    available: false,
   },
   {
     type: "Supply" as const,
@@ -33,6 +36,7 @@ const reportCards = [
     description: "Xuất nhập tồn vật tư trong kỳ và đối chiếu xuất kho với công việc.",
     icon: PackageIcon,
     access: ACCESS.stockManager,
+    available: false,
   },
   {
     type: "Finance" as const,
@@ -40,6 +44,7 @@ const reportCards = [
     description: "Chi phí, doanh thu, lợi nhuận theo mùa vụ, cơ cấu chi phí và dòng tiền.",
     icon: WalletIcon,
     access: ACCESS.financeManager,
+    available: false,
   },
 ];
 
@@ -63,23 +68,45 @@ export function ReportListPage() {
         <EmptyState message="Tài khoản hiện không có quyền xem báo cáo nào." />
       ) : (
         <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {allowedReports.map((report) => (
-            <li key={report.to}>
-              <Link
-                to={report.to}
-                className="flex min-h-16 items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
-              >
+          {allowedReports.map((report) => {
+            const cardContent = (
+              <>
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <report.icon className="size-5" aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-semibold">{reportTypeLabels[report.type]}</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-semibold">{reportTypeLabels[report.type]}</h2>
+                    {!report.available && <Badge variant="secondary">Sắp có</Badge>}
+                  </div>
                   <p className="mt-0.5 text-sm text-muted-foreground">{report.description}</p>
                 </div>
-                <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-              </Link>
-            </li>
-          ))}
+                {report.available && (
+                  <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+                )}
+              </>
+            );
+
+            return (
+              <li key={report.to}>
+                {report.available ? (
+                  <Link
+                    to={report.to}
+                    className="flex min-h-16 items-center gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
+                  >
+                    {cardContent}
+                  </Link>
+                ) : (
+                  <div
+                    aria-disabled="true"
+                    className="flex min-h-16 items-center gap-3 rounded-lg border bg-card/60 p-4 opacity-75"
+                  >
+                    {cardContent}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

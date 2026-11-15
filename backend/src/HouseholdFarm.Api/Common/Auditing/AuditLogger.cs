@@ -13,12 +13,24 @@ public sealed class AuditLogger(
     AppDbContext db,
     ICurrentUser currentUser,
     IAppClock clock,
-    IOptions<JsonOptions> jsonOptions) : IAuditLogger
+    IOptions<JsonOptions> jsonOptions) : IAuditLogger, ICrossHouseholdAuditLogger
 {
     // Cùng cấu hình JSON với phản hồi API để màn hình nhật ký đọc giá trị theo đúng tên trường, tên enum frontend đã biết.
     private readonly JsonSerializerOptions _jsonOptions = jsonOptions.Value.SerializerOptions;
 
-    public void Log(string action, Guid? entityId, object? oldValues, object? newValues, string? reason)
+    public void Log(string action, Guid? entityId, object? oldValues, object? newValues, string? reason) =>
+        Add(currentUser.HouseholdId, action, entityId, oldValues, newValues, reason);
+
+    public void Log(
+        Guid householdId,
+        string action,
+        Guid? entityId,
+        object? oldValues,
+        object? newValues,
+        string? reason) =>
+        Add(householdId, action, entityId, oldValues, newValues, reason);
+
+    private void Add(Guid? householdId, string action, Guid? entityId, object? oldValues, object? newValues, string? reason)
     {
         // Tên gõ sai thì hỏng ngay khi chạy test, không để lọt vào nhật ký một action mà bộ lọc theo loại hành động không biết.
         if (!AuditActions.IsDefined(action))
@@ -28,7 +40,7 @@ public sealed class AuditLogger(
 
         db.AuditLogs.Add(new AuditLog
         {
-            HouseholdId = currentUser.HouseholdId,
+            HouseholdId = householdId,
             ActorId = currentUser.IsAuthenticated ? currentUser.UserId : null,
             Action = action,
             EntityType = action[..action.IndexOf('.')],

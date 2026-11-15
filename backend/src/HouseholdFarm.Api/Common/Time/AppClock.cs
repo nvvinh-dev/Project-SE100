@@ -18,4 +18,7 @@ public sealed class AppClock : IAppClock
 
     // "Hôm nay" theo giờ Việt Nam: từ 0 giờ đến 7 giờ sáng ở Việt Nam, ngày UTC vẫn là hôm qua.
     public DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), _timeZone).DateTime);
+
+    public DateTime StartOfDayUtc(DateOnly date) =>
+        TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), _timeZone);
 }

@@ -54,6 +54,8 @@ const derivedBadges = {
   /** Tồn vật tư dưới `MinStockLevel`. */
   BelowMinStock: { label: "Sắp hết", tone: "amber" },
   NegativeStock: { label: "Tồn âm", tone: "red" },
+  /** Tài khoản bị Chủ hộ, Quản trị khóa (`IsLocked`). */
+  Locked: { label: "Đã khóa", tone: "slate" },
 } as const satisfies Record<string, { label: string; tone: Tone }>;
 
 export type StatusBadgeProps =

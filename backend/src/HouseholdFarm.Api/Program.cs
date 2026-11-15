@@ -10,11 +10,15 @@ using HouseholdFarm.Api.Common.Responses;
 using HouseholdFarm.Api.Common.Time;
 using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
+using HouseholdFarm.Api.Features.Admin;
+using HouseholdFarm.Api.Features.AuditLogs;
 using HouseholdFarm.Api.Features.Auth;
 using HouseholdFarm.Api.Features.Crops;
 using HouseholdFarm.Api.Features.Expenses;
-using HouseholdFarm.Api.Features.Plots;
+using HouseholdFarm.Api.Features.FarmTasks;
 using HouseholdFarm.Api.Features.Harvests;
+using HouseholdFarm.Api.Features.Households;
+using HouseholdFarm.Api.Features.Plots;
 using HouseholdFarm.Api.Features.Reports.Common;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Sales;
@@ -71,13 +75,17 @@ builder.Services.AddAppAuthentication();
 // Chuỗi kết nối đọc lúc tạo DbContext, không đọc lúc khởi động, để test thay được bằng database của Testcontainers.
 // Không bật EnableRetryOnFailure: cơ chế tự thử lại không chạy được với giao dịch database mở bằng tay.
 builder.Services.AddScoped<CommonColumnsInterceptor>();
+builder.Services.AddSingleton<AuditLogImmutabilityInterceptor>();
 builder.Services.AddDbContext<AppDbContext>((services, options) => options
     .UseNpgsql(services.GetRequiredService<IConfiguration>().GetConnectionString("Default"))
     .UseSnakeCaseNamingConvention()
-    .AddInterceptors(services.GetRequiredService<CommonColumnsInterceptor>()));
+    .AddInterceptors(
+        services.GetRequiredService<CommonColumnsInterceptor>(),
+        services.GetRequiredService<AuditLogImmutabilityInterceptor>()));
 
 // Scoped để dùng chung AppDbContext với service gọi nó: nhật ký được lưu cùng lần SaveChangesAsync của thao tác (BR-GEN-07).
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+builder.Services.AddScoped<ICrossHouseholdAuditLogger, AuditLogger>();
 
 // Điểm nối giữa các module: scoped để bên gọi và bên được gọi dùng chung một AppDbContext, một giao dịch database.
 builder.Services.AddScoped<IStockService, StockService>();
@@ -89,10 +97,15 @@ builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPlotService, PlotService>();
 builder.Services.AddScoped<ICropService, CropService>();
+builder.Services.AddScoped<IHouseholdService, HouseholdService>();
+builder.Services.AddScoped<IMemberService, MemberService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<ISeasonService, SeasonService>();
 builder.Services.AddScoped<ISeasonAssignmentService, SeasonAssignmentService>();
 builder.Services.AddScoped<ISeasonNoteService, SeasonNoteService>();
 builder.Services.AddScoped<ISeasonSupplyPlanService, SeasonSupplyPlanService>();
+builder.Services.AddScoped<IFarmTaskService, FarmTaskService>();
 builder.Services.AddScoped<ISupplyService, SupplyService>();
 builder.Services.AddScoped<StockLedger>();
 builder.Services.AddScoped<StockOperations>();
