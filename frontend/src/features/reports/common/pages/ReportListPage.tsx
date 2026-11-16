@@ -44,7 +44,7 @@ const reportCards = [
     description: "Chi phí, doanh thu, lợi nhuận theo mùa vụ, cơ cấu chi phí và dòng tiền.",
     icon: WalletIcon,
     access: ACCESS.financeManager,
-    available: false,
+    available: true,
   },
 ];
 
