@@ -501,7 +501,7 @@ public class SeasonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var clock = TestClock.At(DateTimeOffset.UtcNow);
         var audit = new DummyAuditLogger();
         var produceStock = new ProduceStockService(db, user);
-        var finance = new SeasonFinanceService();
+        var finance = new SeasonFinanceService(db, user);
         var seasonService = new SeasonService(db, user, clock, audit, produceStock, finance);
 
         // Chưa bật AllowOverlappingSeasons: ném SEASON_PLOT_BUSY
