@@ -85,10 +85,15 @@ export function ProductionSeasonList({
                   </dd>
                   <dt className="font-medium">Lợi nhuận</dt>
                   <dd className="text-right">
-                    <MoneyText
-                      amount={item.profit ?? 0}
-                      className={cn("font-semibold", (item.profit ?? 0) < 0 && "text-destructive")}
-                    />
+                    <span className="inline-flex flex-wrap items-baseline justify-end gap-1">
+                      <MoneyText
+                        amount={item.profit ?? 0}
+                        className={cn("font-semibold", (item.profit ?? 0) < 0 && "text-destructive")}
+                      />
+                      {item.season.isProvisional && (
+                        <span className="text-xs text-muted-foreground">(tạm tính)</span>
+                      )}
+                    </span>
                   </dd>
                 </>
               )}
@@ -158,10 +163,15 @@ export function ProductionSeasonList({
                       <MoneyText amount={item.revenue ?? 0} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <MoneyText
-                        amount={item.profit ?? 0}
-                        className={cn("font-semibold", (item.profit ?? 0) < 0 && "text-destructive")}
-                      />
+                      <span className="inline-flex flex-wrap items-baseline justify-end gap-1">
+                        <MoneyText
+                          amount={item.profit ?? 0}
+                          className={cn("font-semibold", (item.profit ?? 0) < 0 && "text-destructive")}
+                        />
+                        {item.season.isProvisional && (
+                          <span className="text-xs text-muted-foreground">(tạm tính)</span>
+                        )}
+                      </span>
                     </TableCell>
                   </>
                 )}

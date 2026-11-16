@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
@@ -18,7 +19,7 @@ import {
 import { useProductionReport } from "@/features/reports/production/queries";
 import type { PreviousSeasonCompareBy } from "@/features/reports/production/types";
 import { ACCESS } from "@/lib/auth/access";
-import { formatArea } from "@/lib/format";
+import { formatArea, parseDecimalInput } from "@/lib/format";
 
 function OverviewTile({ label, value, subtext }: { label: string; value: string | number; subtext?: string }) {
   return (
@@ -37,6 +38,14 @@ export function ProductionReportPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = readProductionReportQuery(searchParams);
   const report = useProductionReport(query);
+  const currentThreshold = query.deviationThreshold ?? DEFAULT_DEVIATION_THRESHOLD;
+  const [syncedThreshold, setSyncedThreshold] = useState(currentThreshold);
+  const [thresholdInput, setThresholdInput] = useState(String(currentThreshold));
+
+  if (syncedThreshold !== currentThreshold) {
+    setSyncedThreshold(currentThreshold);
+    setThresholdInput(String(currentThreshold));
+  }
 
   function updateQuery(
     changes: Partial<{
@@ -51,6 +60,18 @@ export function ProductionReportPage() {
     }>,
   ) {
     setSearchParams((params) => applyProductionFilterParams(params, changes));
+  }
+
+  function commitThreshold() {
+    const parsed = parseDecimalInput(thresholdInput);
+    if (parsed !== null && parsed > 0) {
+      setThresholdInput(String(parsed));
+      if (parsed !== currentThreshold) {
+        updateQuery({ deviationThreshold: parsed });
+      }
+      return;
+    }
+    setThresholdInput(String(currentThreshold));
   }
 
   const extraActiveFilters = [
@@ -79,16 +100,16 @@ export function ProductionReportPage() {
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-muted-foreground">Ngưỡng lệch (%)</span>
         <Input
-          type="number"
+          type="text"
           inputMode="decimal"
-          min={1}
-          step="1"
           className="min-h-11 w-full md:min-h-9 md:w-28"
-          value={query.deviationThreshold ?? DEFAULT_DEVIATION_THRESHOLD}
-          onChange={(event) => {
-            const parsed = Number(event.target.value);
-            if (Number.isFinite(parsed) && parsed > 0) {
-              updateQuery({ deviationThreshold: parsed });
+          value={thresholdInput}
+          onChange={(event) => setThresholdInput(event.target.value)}
+          onBlur={commitThreshold}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitThreshold();
             }
           }}
         />

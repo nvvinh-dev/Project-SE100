@@ -11,10 +11,12 @@ public interface IPreviousSeasonService
     Task<PreviousSeasonInfo?> FindPreviousSeasonAsync(
         Guid seasonId,
         PreviousSeasonCompareBy compareBy = PreviousSeasonCompareBy.SamePlot,
+        bool includeFinanceScope = false,
         CancellationToken ct = default);
 
     Task<IReadOnlyDictionary<Guid, PreviousSeasonInfo?>> FindPreviousSeasonsAsync(
         IReadOnlyCollection<Season> currentSeasons,
         PreviousSeasonCompareBy compareBy,
+        bool includeFinanceScope = false,
         CancellationToken ct = default);
 }

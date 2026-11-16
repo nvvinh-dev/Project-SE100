@@ -55,6 +55,10 @@ public class ProductionReportTests(ApiFactory factory) : IClassFixture<ApiFactor
         var memberSeason = Assert.Single(memberReport.GetProperty("seasons").EnumerateArray());
         Assert.Equal(sInProgress.Id, memberSeason.GetProperty("season").GetProperty("seasonId").GetGuid());
         Assert.NotEqual(sClosed.Id, memberSeason.GetProperty("season").GetProperty("seasonId").GetGuid());
+        // Mùa sClosed cùng thửa TD001 nhưng ngoài phân công của Thành viên -> không lộ qua so sánh mùa trước.
+        var memberComp = memberSeason.GetProperty("previousComparison");
+        Assert.Equal(JsonValueKind.Null, memberComp.GetProperty("previousSeasonId").ValueKind);
+        Assert.Equal("Chưa có mùa trước để so sánh", memberComp.GetProperty("message").GetString());
 
         // Nhân công bị FORBIDDEN.
         var workerResp = await factory.CreateClientFor(household.Worker).GetAsync(ProductionPath, ct);
@@ -219,9 +223,10 @@ public class ProductionReportTests(ApiFactory factory) : IClassFixture<ApiFactor
         // Kiểm tra hàm dùng chung IPreviousSeasonService (cho AI dùng tiêu chí mặc định SamePlot).
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
-            var prevService = new PreviousSeasonService(db);
-            var matched = await prevService.FindPreviousSeasonAsync(sCurrent.Id, PreviousSeasonCompareBy.SamePlot, ct);
+            var ownerUser = TestCurrentUser.For(household.Owner);
+            var db = factory.Postgres.CreateDbContext(ownerUser);
+            var prevService = new PreviousSeasonService(db, ownerUser);
+            var matched = await prevService.FindPreviousSeasonAsync(sCurrent.Id, PreviousSeasonCompareBy.SamePlot, ct: ct);
             Assert.NotNull(matched);
             Assert.Equal(sOld.Id, matched.SeasonId);
             Assert.Equal(5000m, matched.YieldPerHectare);

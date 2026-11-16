@@ -57,20 +57,23 @@ describe("production report filter & chart helpers", () => {
     expect(parsed.compareBy).toBe("SameCrop");
   });
 
-  it("groups chart data by unit and limits each group to at most 8 most recent seasons", () => {
+  it("limits chart to 8 most recent seasons overall before grouping by unit", () => {
     const kgSeasons = Array.from({ length: 10 }, (_, idx) => {
       const month = String(idx + 1).padStart(2, "0");
       return makeSeasonItem(`s-${idx + 1}`, `2026-${month}-01`, "Kilogram");
     });
-    const tonSeason = makeSeasonItem("s-ton", "2026-05-15", "Ton");
+    const tonSeason = makeSeasonItem("s-ton", "2026-08-15", "Ton");
 
     const groups = buildProductionChartGroups([...kgSeasons, tonSeason]);
     expect(groups).toHaveLength(2);
 
+    const totalPoints = groups.reduce((sum, g) => sum + g.points.length, 0);
+    expect(totalPoints).toBe(8);
+
     const kgGroup = groups.find((g) => g.unit === "Kilogram")!;
-    expect(kgGroup.points).toHaveLength(8);
-    expect(kgGroup.points[0].seasonId).toBe("s-3");
-    expect(kgGroup.points[7].seasonId).toBe("s-10");
+    expect(kgGroup.points).toHaveLength(7);
+    expect(kgGroup.points[0].seasonId).toBe("s-4");
+    expect(kgGroup.points[6].seasonId).toBe("s-10");
 
     const tonGroup = groups.find((g) => g.unit === "Ton")!;
     expect(tonGroup.points).toHaveLength(1);

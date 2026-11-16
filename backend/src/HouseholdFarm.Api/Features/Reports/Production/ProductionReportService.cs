@@ -60,7 +60,11 @@ public sealed class ProductionReportService(
                 .Select(g => new { SeasonId = g.Key, Total = g.Sum(x => x.Quantity) })
                 .ToDictionaryAsync(x => x.SeasonId, x => x.Total, ct);
 
-        var previousBySeasonId = await previousSeasonService.FindPreviousSeasonsAsync(activeSeasons, query.CompareBy, ct);
+        var previousBySeasonId = await previousSeasonService.FindPreviousSeasonsAsync(
+            activeSeasons,
+            query.CompareBy,
+            includeFinanceScope: false,
+            ct);
 
         // BR-RPT-04: chỉ gọi dữ liệu tài chính và trả cột tài chính khi người dùng có quyền Quản lý tài chính.
         var financeBySeasonId = new Dictionary<Guid, SeasonFinanceResponse>();

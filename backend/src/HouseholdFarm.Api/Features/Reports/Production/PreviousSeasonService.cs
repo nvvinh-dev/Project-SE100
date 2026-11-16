@@ -1,3 +1,5 @@
+using HouseholdFarm.Api.Common.Auth;
+using HouseholdFarm.Api.Common.Persistence;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Domain.Entities;
 using HouseholdFarm.Api.Domain.Enums;
@@ -5,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HouseholdFarm.Api.Features.Reports.Production;
 
-public sealed class PreviousSeasonService(AppDbContext db) : IPreviousSeasonService
+public sealed class PreviousSeasonService(AppDbContext db, ICurrentUser currentUser) : IPreviousSeasonService
 {
     public async Task<PreviousSeasonInfo?> FindPreviousSeasonAsync(
         Guid seasonId,
         PreviousSeasonCompareBy compareBy = PreviousSeasonCompareBy.SamePlot,
+        bool includeFinanceScope = false,
         CancellationToken ct = default)
     {
         var season = await db.Seasons.AsNoTracking()
@@ -19,13 +22,14 @@ public sealed class PreviousSeasonService(AppDbContext db) : IPreviousSeasonServ
             return null;
         }
 
-        var map = await FindPreviousSeasonsAsync([season], compareBy, ct);
+        var map = await FindPreviousSeasonsAsync([season], compareBy, includeFinanceScope, ct);
         return map.GetValueOrDefault(seasonId);
     }
 
     public async Task<IReadOnlyDictionary<Guid, PreviousSeasonInfo?>> FindPreviousSeasonsAsync(
         IReadOnlyCollection<Season> currentSeasons,
         PreviousSeasonCompareBy compareBy,
+        bool includeFinanceScope = false,
         CancellationToken ct = default)
     {
         var result = new Dictionary<Guid, PreviousSeasonInfo?>();
@@ -39,8 +43,12 @@ public sealed class PreviousSeasonService(AppDbContext db) : IPreviousSeasonServ
             ? currentSeasons.Select(s => s.PlotId).Distinct().ToList()
             : currentSeasons.Select(s => s.CropId).Distinct().ToList();
 
-        // BR-RPT-11: chỉ xét mùa vụ Closed, bỏ qua Cancelled và các mùa vụ chưa chốt.
-        var candidatesQuery = db.Seasons.AsNoTracking()
+        // BR-RPT-11 & FR-RPT-02: chỉ xét mùa vụ Closed trong phạm vi người xem, bỏ qua Cancelled và mùa chưa chốt.
+        var scopedQuery = includeFinanceScope
+            ? db.Seasons.AsNoTracking().VisibleTo(currentUser, ExtraPermission.ManageFinance)
+            : db.Seasons.AsNoTracking().VisibleTo(currentUser);
+
+        var candidatesQuery = scopedQuery
             .Where(s => s.Status == SeasonStatus.Closed && s.StartDate < maxStartDate);
 
         candidatesQuery = compareBy == PreviousSeasonCompareBy.SamePlot

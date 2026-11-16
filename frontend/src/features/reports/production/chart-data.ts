@@ -24,12 +24,15 @@ export interface ProductionChartGroup {
 export function buildProductionChartGroups(
   seasons: readonly ProductionSeasonItem[],
 ): ProductionChartGroup[] {
-  const byUnit = new Map<Unit, ProductionSeasonItem[]>();
+  // Lấy tối đa 8 mùa vụ gần nhất theo bộ lọc trước khi tách nhóm theo đơn vị sản lượng (`06-ui-screens.md` mục 8).
+  const latestEight = seasons
+    .filter((item) => item.season.status !== "Cancelled")
+    .sort((a, b) => b.season.startDate.localeCompare(a.season.startDate))
+    .slice(0, MAX_CHART_SEASONS)
+    .reverse();
 
-  for (const item of seasons) {
-    if (item.season.status === "Cancelled") {
-      continue;
-    }
+  const byUnit = new Map<Unit, ProductionSeasonItem[]>();
+  for (const item of latestEight) {
     const list = byUnit.get(item.season.yieldUnit);
     if (list) {
       list.push(item);
@@ -40,14 +43,9 @@ export function buildProductionChartGroups(
 
   const groups: ProductionChartGroup[] = [];
   for (const [unit, items] of byUnit.entries()) {
-    const latestFirst = [...items].sort((a, b) =>
-      b.season.startDate.localeCompare(a.season.startDate),
-    );
-    const sliced = latestFirst.slice(0, MAX_CHART_SEASONS).reverse();
-
     groups.push({
       unit,
-      points: sliced.map((item) => {
+      points: items.map((item) => {
         const baseName = `${item.season.cropName} · ${item.season.plotCode}`;
         return {
           seasonId: item.season.seasonId,
