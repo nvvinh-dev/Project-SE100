@@ -128,6 +128,56 @@ public class ProduceStockAdjustmentTests(ApiFactory factory) : IClassFixture<Api
         Assert.Equal(HttpStatusCode.OK, closeOk.StatusCode);
     }
 
+    [Fact(DisplayName = "BR-GEN-10: gửi lại cùng requestId trả phiếu đã tạo và chỉ trừ tồn nông sản một lần")]
+    public async Task CreateAdjustment_DuplicateRequestId_ReturnsExistingAndDeductsOnce()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+        await AddHarvestAsync(household, season.Id, QualityGrade.Grade1, 300m, ct);
+
+        var ownerClient = factory.CreateClientFor(household.Owner);
+        var requestId = Guid.CreateVersion7();
+        var body = new
+        {
+            requestId,
+            seasonId = season.Id,
+            qualityGrade = "Grade1",
+            quantity = 100m,
+            adjustmentDate = new DateOnly(2026, 10, 10),
+            reason = "Loss",
+        };
+
+        var first = await ownerClient.PostAsJsonAsync(AdjustmentsPath, body, ct);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var firstId = (await first.ReadJsonAsync(ct)).GetProperty("data").GetProperty("id").GetGuid();
+
+        var second = await ownerClient.PostAsJsonAsync(AdjustmentsPath, body, ct);
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var secondId = (await second.ReadJsonAsync(ct)).GetProperty("data").GetProperty("id").GetGuid();
+        Assert.Equal(firstId, secondId);
+
+        await using (var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner)))
+        {
+            Assert.Equal(1, await db.ProduceStockAdjustments.CountAsync(a => a.RequestId == requestId, ct));
+        }
+
+        // Tồn chỉ giảm 100 -> còn 200 (không bị trừ thành 100).
+        var stockItems = (await (await ownerClient.GetAsync($"{StockPath}?seasonId={season.Id}", ct)).ReadJsonAsync(ct))
+            .GetProperty("data");
+        var g1 = stockItems.EnumerateArray().Single(x => x.GetProperty("qualityGrade").GetString() == "Grade1");
+        Assert.Equal(200m, g1.GetProperty("quantity").GetDecimal());
+        Assert.Equal(100m, g1.GetProperty("totalAdjusted").GetDecimal());
+
+        await AuditLogAssertions.AssertSingleAsync(
+            factory.Postgres,
+            household.Household.Id,
+            AuditActions.ProduceStockAdjustmentAdjust,
+            firstId,
+            ct);
+    }
+
     [Fact(DisplayName = "FR-HAR-07: Từ chối điều chỉnh vượt tồn (BR-HAR-05), thiếu ReasonOther, ngày tương lai, hoặc sai quyền")]
     public async Task CreateAdjustment_ValidationAndAuthorizationChecks()
     {
@@ -140,6 +190,12 @@ public class ProduceStockAdjustmentTests(ApiFactory factory) : IClassFixture<Api
             household,
             await TestData.CreatePlotAsync(factory.Postgres, household, "TD002", ct),
             SeasonStatus.Planned,
+            ct);
+        var closedSeason = await TestData.CreateSeasonAsync(
+            factory.Postgres,
+            household,
+            await TestData.CreatePlotAsync(factory.Postgres, household, "TD003", ct),
+            SeasonStatus.Closed,
             ct);
 
         await AddHarvestAsync(household, season.Id, QualityGrade.Grade1, 100m, ct);
@@ -172,17 +228,20 @@ public class ProduceStockAdjustmentTests(ApiFactory factory) : IClassFixture<Api
         }, ct);
         await missingOtherRes.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
 
-        // Mùa vụ không ở InProgress -> SEASON_INVALID_STATE.
-        var invalidStateRes = await ownerClient.PostAsJsonAsync(AdjustmentsPath, new
+        // Mùa vụ không ở InProgress (Planned, Closed) -> SEASON_INVALID_STATE.
+        foreach (var invalidSeasonId in new[] { plannedSeason.Id, closedSeason.Id })
         {
-            requestId = Guid.CreateVersion7(),
-            seasonId = plannedSeason.Id,
-            qualityGrade = "Grade1",
-            quantity = 1m,
-            adjustmentDate = new DateOnly(2026, 10, 10),
-            reason = "Loss",
-        }, ct);
-        await invalidStateRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
+            var invalidStateRes = await ownerClient.PostAsJsonAsync(AdjustmentsPath, new
+            {
+                requestId = Guid.CreateVersion7(),
+                seasonId = invalidSeasonId,
+                qualityGrade = "Grade1",
+                quantity = 1m,
+                adjustmentDate = new DateOnly(2026, 10, 10),
+                reason = "Loss",
+            }, ct);
+            await invalidStateRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.SeasonInvalidState, ct);
+        }
 
         // Thành viên thường & có ManageFinance đều bị FORBIDDEN.
         foreach (var actor in new[] { household.Member, household.MemberWithAllPermissions, household.Worker })
@@ -202,6 +261,12 @@ public class ProduceStockAdjustmentTests(ApiFactory factory) : IClassFixture<Api
             }, ct);
             await postRes.AssertProblemAsync(HttpStatusCode.Forbidden, ErrorCodes.Forbidden, ct);
         }
+
+        // Các thao tác bị từ chối tuyệt đối không ghi nhật ký (BR-GEN-07).
+        await using var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        Assert.False(await db.AuditLogs.AnyAsync(
+            l => l.Action == AuditActions.ProduceStockAdjustmentAdjust || l.Action == AuditActions.ProduceStockAdjustmentVoid,
+            ct));
     }
 
     [Fact(DisplayName = "FR-HAR-07: Hủy điều chỉnh tồn làm tồn tăng lại, ghi AuditLog và chặn hủy lần hai (BR-HAR-05, BR-GEN-09)")]
@@ -226,6 +291,18 @@ public class ProduceStockAdjustmentTests(ApiFactory factory) : IClassFixture<Api
         Assert.Equal(HttpStatusCode.Created, createRes.StatusCode);
         var adjId = (await createRes.ReadJsonAsync(ct)).GetProperty("data").GetProperty("id").GetGuid();
 
+        var activeRes = await ownerClient.PostAsJsonAsync(AdjustmentsPath, new
+        {
+            requestId = Guid.CreateVersion7(),
+            seasonId = season.Id,
+            qualityGrade = "Grade1",
+            quantity = 20m,
+            adjustmentDate = new DateOnly(2026, 10, 11),
+            reason = "Loss",
+        }, ct);
+        Assert.Equal(HttpStatusCode.Created, activeRes.StatusCode);
+        var activeId = (await activeRes.ReadJsonAsync(ct)).GetProperty("data").GetProperty("id").GetGuid();
+
         var voidRes = await ownerClient.PostAsJsonAsync(
             $"{AdjustmentsPath}/{adjId}/void",
             new { reason = "Nhập nhầm loại nông sản" },
@@ -235,31 +312,40 @@ public class ProduceStockAdjustmentTests(ApiFactory factory) : IClassFixture<Api
         Assert.Equal("Nhập nhầm loại nông sản", voided.GetProperty("voidReason").GetString());
         Assert.NotEqual(JsonValueKind.Null, voided.GetProperty("voidedAt").ValueKind);
 
-        await AuditLogAssertions.AssertSingleAsync(
-            factory.Postgres,
-            household.Household.Id,
-            AuditActions.ProduceStockAdjustmentVoid,
-            adjId,
-            ct);
-
-        // Tồn nông sản tăng lại về 200.
+        // Tồn nông sản tăng lại từ 100 -> 180 (còn trừ 20 của phiếu active).
         var stockItems = (await (await ownerClient.GetAsync($"{StockPath}?seasonId={season.Id}", ct)).ReadJsonAsync(ct))
             .GetProperty("data");
         var g1 = stockItems.EnumerateArray().Single(x => x.GetProperty("qualityGrade").GetString() == "Grade1");
-        Assert.Equal(200m, g1.GetProperty("quantity").GetDecimal());
-        Assert.Equal(0m, g1.GetProperty("totalAdjusted").GetDecimal());
+        Assert.Equal(180m, g1.GetProperty("quantity").GetDecimal());
+        Assert.Equal(20m, g1.GetProperty("totalAdjusted").GetDecimal());
 
-        // Danh sách điều chỉnh mặc định gồm cả bản ghi đã hủy.
-        var listRes = (await (await ownerClient.GetAsync($"{AdjustmentsPath}?seasonId={season.Id}", ct)).ReadJsonAsync(ct))
+        // Danh sách điều chỉnh mặc định gồm cả bản ghi đã hủy lẫn chưa hủy; includeVoided=false chỉ trả bản ghi chưa hủy.
+        var listAll = (await (await ownerClient.GetAsync($"{AdjustmentsPath}?seasonId={season.Id}", ct)).ReadJsonAsync(ct))
             .GetProperty("data");
-        Assert.Single(listRes.EnumerateArray());
+        var allIds = listAll.EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
+        Assert.Equal(2, allIds.Count);
+        Assert.Contains(adjId, allIds);
+        Assert.Contains(activeId, allIds);
 
-        // Hủy lần hai -> ALREADY_VOIDED.
+        var listActive = (await (await ownerClient.GetAsync($"{AdjustmentsPath}?seasonId={season.Id}&includeVoided=false", ct)).ReadJsonAsync(ct))
+            .GetProperty("data");
+        var activeOnly = Assert.Single(listActive.EnumerateArray());
+        Assert.Equal(activeId, activeOnly.GetProperty("id").GetGuid());
+
+        // Hủy lần hai -> ALREADY_VOIDED và không ghi thêm nhật ký.
         var secondVoid = await ownerClient.PostAsJsonAsync(
             $"{AdjustmentsPath}/{adjId}/void",
             new { reason = "Hủy lại" },
             ct);
         await secondVoid.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.AlreadyVoided, ct);
+
+        await AuditLogAssertions.AssertSingleAsync(
+            factory.Postgres,
+            household.Household.Id,
+            AuditActions.ProduceStockAdjustmentVoid,
+            adjId,
+            ct,
+            reason: "Nhập nhầm loại nông sản");
     }
 
     private async Task AddHarvestAsync(TestHousehold household, Guid seasonId, QualityGrade grade, decimal quantity, CancellationToken ct)

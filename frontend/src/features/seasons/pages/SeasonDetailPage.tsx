@@ -469,7 +469,7 @@ export function SeasonDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Tồn nông sản</span>
                 <Button variant="link" size="sm" asChild className="p-0 h-auto">
-                  <Link to="/produce-stock">Xem kho nông sản ›</Link>
+                  <Link to={`/produce-stock?seasonId=${id}`}>Xem kho nông sản ›</Link>
                 </Button>
               </div>
               {season.produceStocks.length === 0 ? (

@@ -25,6 +25,7 @@ import { ACCESS, canAccess } from "@/lib/auth/access";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { produceAdjustmentReasonLabels, qualityGradeLabels } from "@/lib/enum-labels";
 import { qualityGrades, type QualityGrade, type SeasonStatus, type Unit } from "@/lib/enums";
+import { formatQuantity } from "@/lib/format";
 
 interface SeasonStockGroup {
   seasonId: string;
@@ -330,7 +331,7 @@ export function ProduceStockPage() {
         title="Hủy điều chỉnh tồn nông sản"
         description={
           voidTarget
-            ? `Hủy phiếu giảm ${voidTarget.quantity} (${qualityGradeLabels[voidTarget.qualityGrade]}) sẽ làm tồn nông sản của mùa vụ tăng lại tương ứng.`
+            ? `Hủy phiếu giảm ${formatQuantity(voidTarget.quantity, voidTarget.yieldUnit)} (${qualityGradeLabels[voidTarget.qualityGrade]}) sẽ làm tồn nông sản của mùa vụ tăng lại tương ứng.`
             : undefined
         }
         confirmLabel="Hủy điều chỉnh"
