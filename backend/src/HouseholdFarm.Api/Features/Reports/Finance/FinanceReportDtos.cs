@@ -70,6 +70,11 @@ public sealed record FinanceExpenseCostItem(ExpenseCategory Category, decimal Am
 public sealed record FinanceRevenueChannelItem(SalesChannel? Channel, decimal Amount);
 
 /// <summary>Một mùa vụ trong bảng lợi nhuận: thông tin mùa vụ dùng chung và số liệu tài chính cả mùa.</summary>
+/// <param name="ActualYield">Sản lượng thực tế cả mùa, theo đơn vị sản lượng của cây (<c>Season.YieldUnit</c>).</param>
+/// <param name="CostPerYieldUnit">
+/// (Chi phí vật tư + chi phí ghi tay) ÷ sản lượng thực tế (FR-RPT-FIN-02); <c>null</c> khi sản lượng bằng 0.
+/// </param>
+/// <param name="CostPerHectare">(Chi phí vật tư + chi phí ghi tay) ÷ diện tích thửa tính theo ha; <c>null</c> khi diện tích bằng 0.</param>
 public sealed record FinanceSeasonItem(
     ReportSeasonSummaryDto Season,
     decimal SupplyCost,
@@ -77,7 +82,10 @@ public sealed record FinanceSeasonItem(
     decimal Revenue,
     decimal PaidAmount,
     decimal OutstandingAmount,
-    decimal Profit);
+    decimal Profit,
+    decimal ActualYield,
+    decimal? CostPerYieldUnit,
+    decimal? CostPerHectare);
 
 /// <summary>
 /// Dòng tiền (FR-RPT-FIN-03, BR-RPT-07). Giả định: vật tư nhập kho được trả tiền ngay tại ngày nhập.

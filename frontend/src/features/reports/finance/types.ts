@@ -28,6 +28,11 @@ export interface FinanceSeasonItem {
   paidAmount: number;
   outstandingAmount: number;
   profit: number;
+  /** Sản lượng thực tế cả mùa, theo `season.yieldUnit`. */
+  actualYield: number;
+  /** `null` khi sản lượng bằng 0 (FR-RPT-FIN-02). */
+  costPerYieldUnit: number | null;
+  costPerHectare: number | null;
 }
 
 export interface FinanceCashFlow {

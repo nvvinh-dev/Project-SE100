@@ -84,6 +84,28 @@ public class FinanceReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(3_530_000m, report.GetProperty("provisionalProfit").GetDecimal());
     }
 
+    [Fact(DisplayName = "FR-RPT-FIN-02: chi phí trên đơn vị sản lượng và trên ha tính cả mùa; chưa có sản lượng thì không chia")]
+    public async Task Get_ComputesCostPerYieldUnitAndPerHectare()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var data = await ArrangeAsync(ct);
+
+        var report = await GetReportAsync(data.Household.Owner, Period, ct);
+
+        // Thửa 1.000 m² = 0,1 ha. Mùa A: (330.000 + 150.000) ÷ 1.200 kg = 400; ÷ 0,1 ha = 4.800.000.
+        var a = report.GetProperty("seasons").EnumerateArray().Single(s => SeasonId(s) == data.SeasonA);
+        Assert.Equal(1_200m, a.GetProperty("actualYield").GetDecimal());
+        Assert.Equal("Kilogram", a.GetProperty("season").GetProperty("yieldUnit").GetString());
+        Assert.Equal(400m, a.GetProperty("costPerYieldUnit").GetDecimal());
+        Assert.Equal(4_800_000m, a.GetProperty("costPerHectare").GetDecimal());
+
+        // Mùa B chưa có phiếu thu: sản lượng 0, không chia; chi phí trên ha vẫn có: (50.000 + 40.000) ÷ 0,1.
+        var b = report.GetProperty("seasons").EnumerateArray().Single(s => SeasonId(s) == data.SeasonB);
+        Assert.Equal(0m, b.GetProperty("actualYield").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, b.GetProperty("costPerYieldUnit").ValueKind);
+        Assert.Equal(900_000m, b.GetProperty("costPerHectare").GetDecimal());
+    }
+
     [Fact(DisplayName = "BR-RPT-13: lọc theo mùa vụ thì không có chi phí chung, chỉ số liệu của mùa đó; dòng tiền không đổi")]
     public async Task Get_FilterBySeason_OmitsGeneralExpenseAndKeepsCashFlow()
     {
@@ -253,6 +275,12 @@ public class FinanceReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Sale(seasonA.Id, SalesChannel.Trader, null, 10m, 1_000m, new DateOnly(2026, 12, 5)),
             Sale(seasonB.Id, null, customer.Id, 100m, 10_000m, new DateOnly(2026, 11, 15)));
 
+        // Mùa A thu 1.200 kg (phiếu thứ hai ngoài kỳ vẫn tính cho cả mùa), một phiếu Void; mùa B chưa có phiếu thu.
+        db.HarvestRecords.AddRange(
+            Harvest(seasonA.Id, 1_000m, new DateOnly(2026, 10, 30)),
+            Harvest(seasonA.Id, 200m, new DateOnly(2026, 12, 3)),
+            Harvest(seasonA.Id, 500m, new DateOnly(2026, 10, 31), voided: true));
+
         db.Payments.AddRange(
             Payment(traderSale.Id, 1_500_000m, new DateOnly(2026, 11, 2)),
             Payment(traderSale.Id, 500_000m, new DateOnly(2026, 12, 10)),
@@ -316,6 +344,18 @@ public class FinanceReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Quantity = quantity,
             UnitPrice = unitPrice,
             SaleDate = date,
+            RequestId = Guid.CreateVersion7(),
+            VoidedAt = VoidedAt(voided),
+            VoidReason = voided ? "Ghi nhầm" : null,
+        };
+
+    private static HarvestRecord Harvest(Guid seasonId, decimal quantity, DateOnly date, bool voided = false) =>
+        new()
+        {
+            SeasonId = seasonId,
+            HarvestDate = date,
+            QualityGrade = QualityGrade.Grade1,
+            Quantity = quantity,
             RequestId = Guid.CreateVersion7(),
             VoidedAt = VoidedAt(voided),
             VoidReason = voided ? "Ghi nhầm" : null,

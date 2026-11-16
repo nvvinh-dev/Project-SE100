@@ -1,7 +1,9 @@
 import { MoneyText } from "@/components/common/MoneyText";
+import { QuantityText } from "@/components/common/QuantityText";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ReportSeasonStatusBadge } from "@/features/reports/common/components/ReportSeasonStatusBadge";
 import type { FinanceSeasonItem } from "@/features/reports/finance/types";
+import { unitLabels } from "@/lib/enum-labels";
 import { cn } from "@/lib/utils";
 
 function seasonTitle(item: FinanceSeasonItem) {
@@ -17,8 +19,21 @@ function ProfitText({ item }: { item: FinanceSeasonItem }) {
   );
 }
 
+/** Chi phí trên một đơn vị: số tiền kèm "/kg", "/ha"; chưa chia được (sản lượng 0) thì hiện "—" (FR-RPT-FIN-02). */
+function PerUnitMoney({ amount, per }: { amount: number | null; per: string }) {
+  if (amount === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return (
+    <span className="whitespace-nowrap">
+      <MoneyText amount={amount} />
+      <span className="text-muted-foreground">/{per}</span>
+    </span>
+  );
+}
+
 /**
- * Lợi nhuận theo mùa vụ (FR-RPT-FIN-01, FR-RPT-FIN-04): điện thoại hiện dạng thẻ, từ `md` hiện bảng.
+ * Lợi nhuận theo mùa vụ (FR-RPT-FIN-01, FR-RPT-FIN-02, FR-RPT-FIN-04): điện thoại hiện dạng thẻ, từ `md` hiện bảng.
  * Số liệu tính cho cả mùa vụ; mùa vụ chưa chốt ghi "(tạm tính)" (BR-RPT-03).
  */
 export function FinanceSeasonList({ items }: { items: readonly FinanceSeasonItem[] }) {
@@ -40,6 +55,14 @@ export function FinanceSeasonList({ items }: { items: readonly FinanceSeasonItem
               <dd className="text-right"><MoneyText amount={item.revenue} /></dd>
               <dt className="text-muted-foreground">Công nợ</dt>
               <dd className="text-right"><MoneyText amount={item.outstandingAmount} /></dd>
+              <dt className="text-muted-foreground">Sản lượng</dt>
+              <dd className="text-right"><QuantityText value={item.actualYield} unit={item.season.yieldUnit} /></dd>
+              <dt className="text-muted-foreground">Chi phí / đơn vị sản lượng</dt>
+              <dd className="text-right">
+                <PerUnitMoney amount={item.costPerYieldUnit} per={unitLabels[item.season.yieldUnit]} />
+              </dd>
+              <dt className="text-muted-foreground">Chi phí / ha</dt>
+              <dd className="text-right"><PerUnitMoney amount={item.costPerHectare} per="ha" /></dd>
               <dt className="font-medium">Lợi nhuận</dt>
               <dd className="text-right"><ProfitText item={item} /></dd>
             </dl>
@@ -53,10 +76,13 @@ export function FinanceSeasonList({ items }: { items: readonly FinanceSeasonItem
             <TableRow>
               <TableHead>Mùa vụ</TableHead>
               <TableHead>Trạng thái</TableHead>
-              <TableHead className="text-right">Chi phí vật tư</TableHead>
-              <TableHead className="text-right">Chi phí ghi tay</TableHead>
+              <TableHead className="text-right whitespace-normal">Chi phí vật tư</TableHead>
+              <TableHead className="text-right whitespace-normal">Chi phí ghi tay</TableHead>
               <TableHead className="text-right">Doanh thu</TableHead>
               <TableHead className="text-right">Công nợ</TableHead>
+              <TableHead className="text-right">Sản lượng</TableHead>
+              <TableHead className="text-right whitespace-normal">Chi phí / đơn vị sản lượng</TableHead>
+              <TableHead className="text-right whitespace-normal">Chi phí / ha</TableHead>
               <TableHead className="text-right">Lợi nhuận</TableHead>
             </TableRow>
           </TableHeader>
@@ -71,6 +97,13 @@ export function FinanceSeasonList({ items }: { items: readonly FinanceSeasonItem
                 <TableCell className="text-right"><MoneyText amount={item.expenseAmount} /></TableCell>
                 <TableCell className="text-right"><MoneyText amount={item.revenue} /></TableCell>
                 <TableCell className="text-right"><MoneyText amount={item.outstandingAmount} /></TableCell>
+                <TableCell className="text-right">
+                  <QuantityText value={item.actualYield} unit={item.season.yieldUnit} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <PerUnitMoney amount={item.costPerYieldUnit} per={unitLabels[item.season.yieldUnit]} />
+                </TableCell>
+                <TableCell className="text-right"><PerUnitMoney amount={item.costPerHectare} per="ha" /></TableCell>
                 <TableCell className="text-right"><ProfitText item={item} /></TableCell>
               </TableRow>
             ))}
