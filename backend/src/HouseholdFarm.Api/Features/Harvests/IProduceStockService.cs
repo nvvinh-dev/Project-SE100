@@ -46,6 +46,8 @@ public interface IProduceStockService
     /// <remarks>
     /// <para>
     /// Chỉ đọc dữ liệu, không thay đổi database. Tham gia giao dịch database của bên gọi nếu có.
+    /// Tự kiểm tra quyền và phạm vi của <c>ICurrentUser</c> đang đăng nhập (BR-USR-13): Chủ hộ,
+    /// Thành viên trong phân công mùa vụ, hoặc Thành viên có <c>ManageFinance</c> được xem mọi mùa vụ của hộ.
     /// Lỗi: <c>FORBIDDEN</c> khi người dùng là Nhân công;
     /// <c>NOT_FOUND</c> khi có mùa vụ không thuộc hộ hoặc ngoài phạm vi được phép (BR-GEN-02, BR-USR-13).
     /// </para>

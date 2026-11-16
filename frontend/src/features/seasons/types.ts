@@ -75,6 +75,10 @@ export interface SeasonListItem {
   expectedHarvestDate: string;
   targetYield: number;
   status: SeasonStatus;
+  harvestedYield: number;
+  yieldDeviation: number;
+  completedTasksCount: number;
+  totalTasksCount: number;
 }
 
 // Tham số danh sách mùa vụ; sort: startDate (mặc định), expectedHarvestDate, targetYield, createdAt (FR-SEA-11).
@@ -149,6 +153,7 @@ export interface SeasonDetailResponse {
   cancelReason?: string;
   version: number;
   harvestedYield: number;
+  yieldDeviation: number;
   completedTasksCount: number;
   totalTasksCount: number;
   produceStocks: ProduceStockSummaryItem[];

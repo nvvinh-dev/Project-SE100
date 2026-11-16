@@ -2,13 +2,11 @@ import {
   CalendarIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
-  FileTextIcon,
   MoreVerticalIcon,
   PlayIcon,
   PlusIcon,
   RotateCcwIcon,
   SparklesIcon,
-  SproutIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -38,7 +36,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FarmTaskListSection } from "@/features/farm-tasks/components/FarmTaskListSection";
+import { HarvestListSection } from "@/features/harvests/components/HarvestListSection";
 import { SeasonNotesTab } from "@/features/seasons/components/SeasonNotesTab";
+import { formatYieldDeviation } from "@/features/seasons/utils";
 import {
   useCancelSeason,
   useCloseSeason,
@@ -47,6 +48,7 @@ import {
   useStartSeason,
 } from "@/features/seasons/queries";
 import { ApiError, type ConfirmationItem, getConfirmationItems } from "@/lib/api-error";
+import { ACCESS, canAccess } from "@/lib/auth/access";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 type TabKey = "overview" | "tasks" | "harvests" | "finance" | "notes";
@@ -266,6 +268,11 @@ export function SeasonDetailPage() {
             </span>
             <span>
               Đã thu: <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> ({progressPercent}%)
+              {season.harvestedYield > 0 && season.targetYield > 0 && (
+                <span className="ml-1 text-muted-foreground">
+                  (Chênh lệch {formatYieldDeviation(season.yieldDeviation)})
+                </span>
+              )}
             </span>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary">
@@ -413,8 +420,15 @@ export function SeasonDetailPage() {
                   className="flex items-center justify-between rounded-md bg-background p-2.5 border hover:bg-muted/50"
                 >
                   <span className="flex items-center gap-2">
-                    <CheckCircle2Icon className="h-4 w-4 text-muted-foreground" />
-                    Lập lịch công việc ban đầu
+                    <CheckCircle2Icon
+                      className={
+                        season.totalTasksCount > 0 ? "h-4 w-4 text-green-600" : "h-4 w-4 text-muted-foreground"
+                      }
+                    />
+                    <span>Lập lịch công việc ban đầu</span>
+                    {season.totalTasksCount > 0 && (
+                      <span className="text-xs text-muted-foreground">({season.totalTasksCount} công việc)</span>
+                    )}
                   </span>
                   <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />
                 </Link>
@@ -478,7 +492,7 @@ export function SeasonDetailPage() {
                         <span className="font-semibold">
                           <QuantityText value={stock.quantity} unit={stock.unit} />
                         </span>
-                        {stock.quantity > 0 && (
+                        {stock.quantity > 0 && user && canAccess(user, ACCESS.financeManager) && (
                           <Button size="sm" variant="outline" asChild className="h-7 text-xs">
                             <Link to={`/sales/new?seasonId=${id}&grade=${stock.grade}`}>Bán</Link>
                           </Button>
@@ -544,47 +558,47 @@ export function SeasonDetailPage() {
       {/* Tab Công việc */}
       {activeTab === "tasks" && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold">Công việc của mùa vụ</span>
-            <Button size="sm" asChild>
-              <Link to={`/tasks/new?seasonId=${id}`}>
-                <PlusIcon className="mr-1.5 h-4 w-4" /> Thêm công việc
-              </Link>
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="text-sm font-semibold">Công việc của mùa vụ</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                ({season.completedTasksCount}/{season.totalTasksCount} hoàn thành)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" asChild>
+                <Link to={`/tasks?seasonId=${id}`}>Mở toàn trang</Link>
+              </Button>
+              {(season.status === "Planned" || season.status === "InProgress") && (
+                <Button size="sm" asChild>
+                  <Link to={`/tasks/new?seasonId=${id}`}>
+                    <PlusIcon className="mr-1.5 h-4 w-4" /> Thêm công việc
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="rounded-lg border bg-card p-6 text-center space-y-2">
-            <SproutIcon className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">
-              Đã hoàn thành {season.completedTasksCount} / {season.totalTasksCount} công việc
-            </p>
-            <Button variant="outline" asChild>
-              <Link to={`/tasks?seasonId=${id}`}>Mở trang quản lý công việc</Link>
-            </Button>
-          </div>
+          <FarmTaskListSection fixedSeasonId={id} />
         </div>
       )}
 
       {/* Tab Thu hoạch */}
       {activeTab === "harvests" && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold">Phiếu thu hoạch</span>
-            <Button size="sm" asChild>
-              <Link to={`/harvests/new?seasonId=${id}`}>
-                <PlusIcon className="mr-1.5 h-4 w-4" /> Thu hoạch
-              </Link>
-            </Button>
-          </div>
-          <div className="rounded-lg border bg-card p-6 text-center space-y-2">
-            <FileTextIcon className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">
               Tổng sản lượng đã thu:{" "}
               <QuantityText value={season.harvestedYield} unit={season.yieldUnit} />
-            </p>
-            <Button variant="outline" asChild>
-              <Link to={`/harvests?seasonId=${id}`}>Mở trang danh sách thu hoạch</Link>
-            </Button>
+            </span>
+            {!season.isOutOfScope && season.status === "InProgress" && (
+              <Button size="sm" asChild>
+                <Link to={`/harvests/new?seasonId=${id}`}>
+                  <PlusIcon className="mr-1.5 h-4 w-4" /> Thu hoạch
+                </Link>
+              </Button>
+            )}
           </div>
+          <HarvestListSection fixedSeasonId={id} />
         </div>
       )}
 

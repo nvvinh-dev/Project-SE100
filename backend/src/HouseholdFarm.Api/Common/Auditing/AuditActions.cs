@@ -40,6 +40,7 @@ public static class AuditActions
     public const string SeasonAssignmentAssign = "SeasonAssignment.Assign";
     public const string SeasonAssignmentUnassign = "SeasonAssignment.Unassign";
 
+    // Lock, Unlock do Quản trị thực hiện ghi bằng ICrossHouseholdAuditLogger, vào hộ của tài khoản bị tác động.
     public const string ApplicationUserChangeRole = "ApplicationUser.ChangeRole";
     public const string ApplicationUserChangePermissions = "ApplicationUser.ChangePermissions";
     public const string ApplicationUserLock = "ApplicationUser.Lock";
@@ -47,8 +48,7 @@ public static class AuditActions
 
     public const string HouseholdChangeSettings = "Household.ChangeSettings";
 
-    // household_id là hộ được xem, không phải hộ của người đang đăng nhập (BR-USR-16); IAuditLogger.Log lấy hộ của
-    // người đang đăng nhập nên chưa ghi được thao tác này, phần ghi riêng làm cùng FR-ADM-04.
+    // household_id là hộ được xem, không phải hộ của người đang đăng nhập (BR-USR-16): ghi bằng ICrossHouseholdAuditLogger.
     public const string HouseholdSupportAccess = "Household.SupportAccess";
 
     public const string ReportExport = "Report.Export";

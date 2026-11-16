@@ -111,7 +111,8 @@ export const moreGroups: readonly NavGroup[] = [
   {
     title: "Quản lý hộ",
     items: [
-      { label: "Thông tin hộ", icon: Building2Icon, to: "/household", access: ACCESS.household },
+      // end: không tô "Thông tin hộ" khi đang ở "/household/settings" (Cài đặt hộ).
+      { label: "Thông tin hộ", icon: Building2Icon, to: "/household", access: ACCESS.household, end: true },
       { label: "Thành viên", icon: UsersIcon, to: "/members", access: ACCESS.owner },
       { label: "Cài đặt hộ", icon: SettingsIcon, to: "/household/settings", access: ACCESS.owner },
       { label: "Nhật ký thao tác", icon: ScrollTextIcon, to: "/audit-logs", access: ACCESS.owner },

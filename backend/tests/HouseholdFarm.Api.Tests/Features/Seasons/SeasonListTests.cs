@@ -309,5 +309,92 @@ public class SeasonListTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var error = problem.GetProperty("errors").GetProperty("permission")[0].GetString();
         Assert.Equal("Chỉ nhận quyền Kho hoặc Tài chính.", error);
     }
+
+    [Fact(DisplayName = "FR-HAR-02: Danh sách và chi tiết mùa vụ tính đúng harvestedYield, yieldDeviation (%) và tiến độ công việc")]
+    public async Task GetListAndDetail_ComputesHarvestedYieldDeviationAndTaskProgress()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var plot = await TestData.CreatePlotAsync(factory.Postgres, household, "TD001", ct);
+        // TargetYield mặc định của TestData.CreateSeasonAsync = 5000m
+        var season = await TestData.CreateSeasonAsync(factory.Postgres, household, plot, SeasonStatus.InProgress, ct);
+
+        await using (var db = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner)))
+        {
+            db.HarvestRecords.AddRange(
+                new HarvestRecord
+                {
+                    SeasonId = season.Id,
+                    HarvestDate = new DateOnly(2026, 10, 5),
+                    QualityGrade = QualityGrade.Grade1,
+                    Quantity = 1500m,
+                    RequestId = Guid.CreateVersion7(),
+                },
+                new HarvestRecord
+                {
+                    SeasonId = season.Id,
+                    HarvestDate = new DateOnly(2026, 10, 8),
+                    QualityGrade = QualityGrade.Grade2,
+                    Quantity = 750m,
+                    RequestId = Guid.CreateVersion7(),
+                },
+                // Phiếu Void không được cộng vào sản lượng thực tế
+                new HarvestRecord
+                {
+                    SeasonId = season.Id,
+                    HarvestDate = new DateOnly(2026, 10, 9),
+                    QualityGrade = QualityGrade.Grade1,
+                    Quantity = 999m,
+                    RequestId = Guid.CreateVersion7(),
+                    VoidedAt = DateTime.UtcNow,
+                    VoidReason = "Ghi nhầm",
+                });
+
+            db.FarmTasks.AddRange(
+                new FarmTask
+                {
+                    SeasonId = season.Id,
+                    Type = FarmTaskType.Watering,
+                    ScheduledDate = new DateOnly(2026, 10, 3),
+                    Status = FarmTaskStatus.Done,
+                },
+                new FarmTask
+                {
+                    SeasonId = season.Id,
+                    Type = FarmTaskType.Weeding,
+                    ScheduledDate = new DateOnly(2026, 10, 4),
+                    Status = FarmTaskStatus.Pending,
+                },
+                // Công việc Cancelled không tính vào tổng số việc
+                new FarmTask
+                {
+                    SeasonId = season.Id,
+                    Type = FarmTaskType.Spraying,
+                    ScheduledDate = new DateOnly(2026, 10, 5),
+                    Status = FarmTaskStatus.Cancelled,
+                });
+
+            await db.SaveChangesAsync(ct);
+        }
+
+        var client = factory.CreateClientFor(household.Owner);
+
+        // (2250 - 5000) / 5000 * 100 = -55.0%
+        var listRes = await client.GetAsync($"{SeasonsPath}?plotId={plot.Id}", ct);
+        Assert.Equal(HttpStatusCode.OK, listRes.StatusCode);
+        var listItem = Assert.Single((await listRes.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray());
+        Assert.Equal(2250m, listItem.GetProperty("harvestedYield").GetDecimal());
+        Assert.Equal(-55.0m, listItem.GetProperty("yieldDeviation").GetDecimal());
+        Assert.Equal(1, listItem.GetProperty("completedTasksCount").GetInt32());
+        Assert.Equal(2, listItem.GetProperty("totalTasksCount").GetInt32());
+
+        var detailRes = await client.GetAsync($"{SeasonsPath}/{season.Id}", ct);
+        Assert.Equal(HttpStatusCode.OK, detailRes.StatusCode);
+        var detail = (await detailRes.ReadJsonAsync(ct)).GetProperty("data");
+        Assert.Equal(2250m, detail.GetProperty("harvestedYield").GetDecimal());
+        Assert.Equal(-55.0m, detail.GetProperty("yieldDeviation").GetDecimal());
+        Assert.Equal(1, detail.GetProperty("completedTasksCount").GetInt32());
+        Assert.Equal(2, detail.GetProperty("totalTasksCount").GetInt32());
+    }
 }
 
