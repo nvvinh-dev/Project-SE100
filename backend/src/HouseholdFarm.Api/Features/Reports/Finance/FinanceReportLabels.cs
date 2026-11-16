@@ -36,6 +36,23 @@ internal static class FinanceReportLabels
         _ => channel.Value.ToString(),
     };
 
+    public static string Of(Unit unit) => unit switch
+    {
+        Unit.Kilogram => "kg",
+        Unit.Gram => "g",
+        Unit.Quintal => "tạ",
+        Unit.Ton => "tấn",
+        Unit.Liter => "lít",
+        Unit.Milliliter => "ml",
+        Unit.Bag => "bao",
+        Unit.Bottle => "chai",
+        Unit.Pack => "gói",
+        Unit.Plant => "cây",
+        Unit.Fruit => "quả",
+        Unit.Bunch => "bó",
+        _ => unit.ToString(),
+    };
+
     public static string Of(SeasonStatus status) => status switch
     {
         SeasonStatus.Planned => "Lên kế hoạch",

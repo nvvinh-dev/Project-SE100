@@ -19,6 +19,7 @@ public sealed class FinanceReportService(
 {
     private const string CashFlowAssumption = "Giả định: vật tư nhập kho được trả tiền ngay tại ngày nhập.";
     private const string CashFlowTimeOnly = "Dòng tiền chỉ xem theo thời gian, không áp dụng bộ lọc mùa vụ, thửa, cây trồng.";
+    private const decimal SquareMetersPerHectare = 10_000m;
     private static readonly CultureInfo _vi = CultureInfo.GetCultureInfo("vi-VN");
 
     private readonly TimeZoneInfo _timeZone = ReportSeasonQueryExtensions.GetAppTimeZone(configuration);
@@ -96,12 +97,33 @@ public sealed class FinanceReportService(
 
         // Số liệu từng mùa vụ lấy qua hàm đọc dùng chung, tính cho cả mùa (BR-RPT-13 ý 2).
         var finances = (await seasonFinanceService.GetAsync(seasonIds, ct)).ToDictionary(f => f.SeasonId);
+
+        // Sản lượng thực tế cả mùa = tổng phiếu thu hoạch chưa Void (data model mục 6), gộp một truy vấn.
+        var actualYields = await db.HarvestRecords.AsNoTracking()
+            .Where(h => h.VoidedAt == null && seasonIds.Contains(h.SeasonId))
+            .GroupBy(h => h.SeasonId)
+            .Select(g => new { SeasonId = g.Key, Total = g.Sum(h => h.Quantity) })
+            .ToDictionaryAsync(x => x.SeasonId, x => x.Total, ct);
+
         var seasonItems = seasons
             .Select(s =>
             {
                 var f = finances[s.Id];
+                var actualYield = actualYields.GetValueOrDefault(s.Id);
+                // FR-RPT-FIN-02, BR-RPT-13 ý 5: tính riêng từng mùa vụ, không quy đổi đơn vị sản lượng; sản lượng 0 thì không chia.
+                var seasonCost = f.SupplyCost + f.ExpenseAmount;
+                var hectares = s.Plot.AreaM2 / SquareMetersPerHectare;
                 return new FinanceSeasonItem(
-                    s.ToSummaryDto(), f.SupplyCost, f.ExpenseAmount, f.Revenue, f.PaidAmount, f.OutstandingAmount, f.Profit);
+                    s.ToSummaryDto(),
+                    f.SupplyCost,
+                    f.ExpenseAmount,
+                    f.Revenue,
+                    f.PaidAmount,
+                    f.OutstandingAmount,
+                    f.Profit,
+                    actualYield,
+                    actualYield > 0m ? RoundMoney(seasonCost / actualYield) : null,
+                    hectares > 0m ? RoundMoney(seasonCost / hectares) : null);
             })
             .ToList();
         var (activeSeasons, cancelledSeasons) = seasonItems.PartitionCancelled(i => i.Season.Status);
@@ -324,6 +346,10 @@ public sealed class FinanceReportService(
             new ReportColumn("Đã thu", ReportColumnType.Money),
             new ReportColumn("Công nợ", ReportColumnType.Money),
             new ReportColumn("Lợi nhuận", ReportColumnType.Money),
+            new ReportColumn("Sản lượng", ReportColumnType.Decimal),
+            new ReportColumn("Đơn vị", ReportColumnType.Text),
+            new ReportColumn("Chi phí / đơn vị sản lượng", ReportColumnType.Money),
+            new ReportColumn("Chi phí / ha", ReportColumnType.Money),
         };
 
         var cashFlowRows = new List<IReadOnlyList<object?>>
@@ -343,7 +369,7 @@ public sealed class FinanceReportService(
                 "Lợi nhuận theo mùa vụ",
                 seasonColumns,
                 report.Seasons.Select(SeasonRow).ToList(),
-                "Lợi nhuận của mùa vụ chưa chốt là số tạm tính."),
+                "Lợi nhuận của mùa vụ chưa chốt là số tạm tính. Chi phí trên đơn vị tính cho cả mùa vụ; ô trống là mùa vụ chưa có sản lượng."),
         };
         if (report.CancelledSeasons.Count > 0)
         {
@@ -388,7 +414,13 @@ public sealed class FinanceReportService(
         item.PaidAmount,
         item.OutstandingAmount,
         item.Profit,
+        item.ActualYield,
+        FinanceReportLabels.Of(item.Season.YieldUnit),
+        item.CostPerYieldUnit,
+        item.CostPerHectare,
     ];
+
+    private static decimal RoundMoney(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
 
     private static string MonthLabel(string month) => $"{month[5..]}/{month[..4]}";
 
