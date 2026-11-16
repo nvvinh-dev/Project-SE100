@@ -10,7 +10,9 @@ import type {
   SaleResponse,
   UpdateCustomerRequest,
 } from "@/features/sales/types";
+import type { HarvestRecordListItem } from "@/features/harvests/types";
 import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
+import type { QualityGrade } from "@/lib/enums";
 
 /** Một trang của danh sách: `items` là `data`, thông tin trang ở `meta`. */
 export interface Page<T> {
@@ -61,5 +63,16 @@ export async function createSale(request: CreateSaleRequest): Promise<SaleRespon
 /** Tồn nông sản của mùa vụ (API của module thu hoạch); trả mọi loại chất lượng, trang tự chọn loại cần. */
 export async function getProduceStock(seasonId: string): Promise<ProduceStockResponse[]> {
   const response = await apiClient.get<ResponseEnvelope<ProduceStockResponse[]>>("/produce-stock", { params: { seasonId } });
+  return response.data.data;
+}
+
+/**
+ * Phiếu thu hoạch chọn được để liên kết (API của module thu hoạch, chế độ `forSaleLink`): cùng mùa vụ, cùng loại,
+ * chưa hủy (BR-SAL-05). TV+TC xem được cả mùa vụ ngoài phân công ở chế độ này (BR-USR-13).
+ */
+export async function getHarvestsForSaleLink(seasonId: string, qualityGrade: QualityGrade): Promise<HarvestRecordListItem[]> {
+  const response = await apiClient.get<ResponseEnvelope<HarvestRecordListItem[]>>("/harvest-records", {
+    params: { seasonId, qualityGrade, forSaleLink: true, pageSize: 100 },
+  });
   return response.data.data;
 }

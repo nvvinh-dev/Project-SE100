@@ -4,13 +4,16 @@ import {
   createSale,
   getCustomer,
   getCustomers,
+  getHarvestsForSaleLink,
   getProduceStock,
   getSale,
   getSales,
   updateCustomer,
 } from "@/features/sales/api";
 import type { CustomerQuery, SaleQuery, UpdateCustomerRequest } from "@/features/sales/types";
+import { harvestKeys } from "@/features/harvests/queries";
 import { seasonKeys } from "@/features/seasons/queries";
+import type { QualityGrade } from "@/lib/enums";
 
 export const customerKeys = {
   all: ["customers"] as const,
@@ -98,4 +101,13 @@ export function useInvalidateSales() {
 export function useCreateSale() {
   const invalidate = useInvalidateSales();
   return useMutation({ mutationFn: createSale, onSuccess: invalidate });
+}
+
+/** Phiếu thu chọn được để liên kết; key nằm dưới `harvestKeys.all` nên tự làm mới khi ghi, sửa, hủy phiếu thu. */
+export function useHarvestsForSaleLink(seasonId: string, qualityGrade: QualityGrade | "") {
+  return useQuery({
+    queryKey: [...harvestKeys.all, "for-sale-link", seasonId, qualityGrade] as const,
+    queryFn: () => getHarvestsForSaleLink(seasonId, qualityGrade as QualityGrade),
+    enabled: seasonId !== "" && qualityGrade !== "",
+  });
 }

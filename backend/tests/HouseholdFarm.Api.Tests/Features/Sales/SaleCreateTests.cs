@@ -10,7 +10,7 @@ using static HouseholdFarm.Api.Tests.Features.Sales.SaleTestData;
 namespace HouseholdFarm.Api.Tests.Features.Sales;
 
 /// <summary>Tạo giao dịch bán (FR-SAL-01, FR-SAL-02, FR-SAL-03, FR-SAL-06; BR-SAL-01, BR-SAL-05, BR-GEN-10).</summary>
-public class SaleCreateTests(SalesApiFactory factory) : IClassFixture<SalesApiFactory>
+public class SaleCreateTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Fact(DisplayName = "FR-SAL-01: tạo giao dịch bán thành công, doanh thu = số lượng × đơn giá, có nhật ký Sale.Create")]
     public async Task Create_ValidSale_Succeeds()

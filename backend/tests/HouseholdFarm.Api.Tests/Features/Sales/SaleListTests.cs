@@ -8,7 +8,7 @@ using static HouseholdFarm.Api.Tests.Features.Sales.SaleTestData;
 namespace HouseholdFarm.Api.Tests.Features.Sales;
 
 /// <summary>Danh sách, chi tiết giao dịch bán (FR-SAL-09).</summary>
-public class SaleListTests(SalesApiFactory factory) : IClassFixture<SalesApiFactory>
+public class SaleListTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Fact(DisplayName = "FR-SAL-09: lọc theo trạng thái thanh toán; thanh toán đã Void không tính vào đã thu")]
     public async Task GetList_FilterByPaymentStatus_UsesNonVoidedPayments()
