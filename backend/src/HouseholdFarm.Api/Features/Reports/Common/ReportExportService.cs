@@ -20,9 +20,11 @@ public sealed class ReportExportService(
     IAuditLogger audit,
     IReportAccessService access,
     ExcelReportWriter excelWriter,
+    PdfReportWriter pdfWriter,
     IOptions<JsonOptions> jsonOptions) : IReportExportService
 {
     private const string ExcelContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string PdfContentType = "application/pdf";
 
     private readonly JsonSerializerOptions _jsonOptions = jsonOptions.Value.SerializerOptions;
     private readonly TimeZoneInfo _timeZone = ReportSeasonQueryExtensions.GetAppTimeZone(configuration);
@@ -37,14 +39,14 @@ public sealed class ReportExportService(
     {
         access.EnsureCanViewReport(reportType);
 
-        if (format != ExportFormat.Excel)
-        {
-            throw new AppException(ErrorCodes.ValidationError, "Hiện chỉ hỗ trợ xuất báo cáo định dạng Excel.");
-        }
-
         // Tạo tệp trước khi mở giao dịch để lỗi dựng tệp không ghi bản ghi rỗng xuống database.
         var exportedAt = clock.UtcNow;
-        var content = excelWriter.Write(document, exportedAt, _timeZone);
+        var (content, contentType, extension) = format switch
+        {
+            ExportFormat.Excel => (excelWriter.Write(document, exportedAt, _timeZone), ExcelContentType, "xlsx"),
+            ExportFormat.Pdf => (pdfWriter.Write(document, exportedAt, _timeZone), PdfContentType, "pdf"),
+            _ => throw new AppException(ErrorCodes.ValidationError, "Định dạng xuất báo cáo không được hỗ trợ."),
+        };
         var serializedFilters = JsonSerializer.Serialize(fullFilterPayload, _jsonOptions);
 
         // BR-RPT-09: mỗi lần xuất lưu 1 dòng report_exports và 1 dòng nhật ký Report.Export trong cùng transaction.
@@ -78,7 +80,7 @@ public sealed class ReportExportService(
         await transaction.CommitAsync(ct);
 
         var exportedLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(exportedAt, DateTimeKind.Utc), _timeZone);
-        var fileName = $"{document.FileNamePrefix}-{exportedLocal.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.xlsx";
-        return new ExportedFileResult(content, ExcelContentType, fileName);
+        var fileName = $"{document.FileNamePrefix}-{exportedLocal.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.{extension}";
+        return new ExportedFileResult(content, contentType, fileName);
     }
 }

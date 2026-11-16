@@ -29,7 +29,7 @@ export function ExportButtons({
   filter,
   access,
   disabled = false,
-  enablePdf = false,
+  enablePdf = true,
 }: ExportButtonsProps) {
   const { data: user } = useCurrentUser();
   const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
