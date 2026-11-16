@@ -28,12 +28,13 @@ public sealed class HarvestService(
         // Ma trận phân quyền: Nhân công và Quản trị không xem được phiếu thu hoạch.
         currentUser.EnsureNotWorker();
 
-        // BR-USR-13: Chủ hộ xem cả hộ; thành viên xem mùa vụ được phân công; người có ManageFinance xem mọi phiếu để liên kết bán hàng.
-        var harvests = db.HarvestRecords
-            .AsNoTracking()
-            .VisibleTo(currentUser, ExtraPermission.ManageFinance);
+        var forSaleLink = query.ForSaleLink == true;
+        // BR-USR-13: Chủ hộ xem cả hộ; thành viên xem mùa vụ được phân công; người có ManageFinance chỉ mở rộng khi chọn liên kết bán (forSaleLink=true).
+        var harvests = forSaleLink
+            ? db.HarvestRecords.AsNoTracking().VisibleTo(currentUser, ExtraPermission.ManageFinance)
+            : db.HarvestRecords.AsNoTracking().VisibleTo(currentUser);
 
-        if (query.IncludeVoided != true)
+        if (forSaleLink || query.IncludeVoided != true)
         {
             harvests = harvests.Where(h => h.VoidedAt == null);
         }
@@ -89,7 +90,7 @@ public sealed class HarvestService(
     public async Task<HarvestRecordResponse> GetAsync(Guid id, CancellationToken ct)
     {
         currentUser.EnsureNotWorker();
-        return await ReadResponseAsync(id, allowFinanceScope: true, ct);
+        return await ReadResponseAsync(id, allowFinanceScope: false, ct);
     }
 
     public async Task<HarvestRecordResponse> CreateAsync(CreateHarvestRecordRequest request, CancellationToken ct)
@@ -336,7 +337,7 @@ public sealed class HarvestService(
         }
         catch (NotImplementedException)
         {
-            // Khi FR-SAL-03 chưa hoàn thiện, chỉ bỏ qua nếu phiếu thu chưa từng gắn với giao dịch bán nào.
+            // Tạm thời cho FR-SAL-03: xóa khối try/catch này khi SaleHarvestLinkService hoàn thiện ở FR-SAL-03.
             if (await db.SaleHarvestLinks.AnyAsync(l => l.HarvestRecordId == harvestRecordId, ct))
             {
                 throw;

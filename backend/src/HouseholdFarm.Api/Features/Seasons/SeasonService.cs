@@ -525,42 +525,24 @@ public sealed class SeasonService(
                 .Where(h => h.SeasonId == id && h.VoidedAt == null)
                 .SumAsync(h => (decimal?)h.Quantity, ct) ?? 0m;
 
-            try
-            {
-                var stocks = await produceStockService.GetStockAsync(id, ct);
-                produceStocks = stocks.Select(p => new ProduceStockSummaryItem(
-                    p.QualityGrade,
-                    p.Quantity,
-                    season.Crop.YieldUnit)).ToList();
-            }
-            catch (NotImplementedException)
-            {
-                produceStocks = [
-                    new(QualityGrade.Grade1, 0, season.Crop.YieldUnit),
-                    new(QualityGrade.Grade2, 0, season.Crop.YieldUnit),
-                    new(QualityGrade.Grade3, 0, season.Crop.YieldUnit),
-                ];
-            }
+            var stocks = await produceStockService.GetStockAsync(id, ct);
+            produceStocks = stocks.Select(p => new ProduceStockSummaryItem(
+                p.QualityGrade,
+                p.Quantity,
+                season.Crop.YieldUnit)).ToList();
         }
 
         // BR-USR-13: Tóm tắt tài chính dành cho Chủ hộ hoặc người có quyền ManageFinance (không tự tính, lấy qua ISeasonFinanceService)
         if (isOwner || currentUser.CanManageFinance)
         {
-            try
+            var financeSummaries = await seasonFinanceService.GetAsync([id], ct);
+            var finance = financeSummaries.FirstOrDefault(f => f.SeasonId == id);
+            if (finance is not null)
             {
-                var financeSummaries = await seasonFinanceService.GetAsync([id], ct);
-                var finance = financeSummaries.FirstOrDefault(f => f.SeasonId == id);
-                if (finance is not null)
-                {
-                    financialSummary = new SeasonFinancialSummary(
-                        finance.SupplyCost + finance.ExpenseAmount,
-                        finance.Revenue,
-                        finance.Profit);
-                }
-            }
-            catch (NotImplementedException)
-            {
-                // Khi RPT-FIN chưa hiện thực thì giữ financialSummary = null
+                financialSummary = new SeasonFinancialSummary(
+                    finance.SupplyCost + finance.ExpenseAmount,
+                    finance.Revenue,
+                    finance.Profit);
             }
         }
 

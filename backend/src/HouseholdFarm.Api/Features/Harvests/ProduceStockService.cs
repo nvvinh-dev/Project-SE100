@@ -56,29 +56,22 @@ public class ProduceStockService(AppDbContext db, ICurrentUser currentUser) : IP
             throw AppException.NotFound("mùa vụ");
         }
 
-        var totalHarvested = await db.HarvestRecords
-            .AsNoTracking()
-            .Where(h => h.SeasonId == seasonId && h.QualityGrade == qualityGrade && h.VoidedAt == null)
-            .SumAsync(h => (decimal?)h.Quantity, ct) ?? 0m;
+        // Dùng chung ComputeStockAsync để tồn nông sản chỉ tính ở một nơi (FR-HAR-05).
+        var stocks = await ComputeStockAsync([seasonId], ct);
+        var available = stocks.First(s => s.QualityGrade == qualityGrade).Quantity;
 
-        var salesQuery = db.Sales
-            .AsNoTracking()
-            .Where(s => s.SeasonId == seasonId && s.QualityGrade == qualityGrade && s.VoidedAt == null);
-
-        if (currentSaleId.HasValue)
+        if (currentSaleId is { } saleId)
         {
-            // BR-SAL-03: hoàn lại sản lượng của chính giao dịch đang đính chính trước khi kiểm tra.
-            salesQuery = salesQuery.Where(s => s.Id != currentSaleId.Value);
+            // BR-SAL-03: hoàn lại sản lượng của chính giao dịch đang điều chỉnh trước khi kiểm tra.
+            available += await db.Sales
+                .AsNoTracking()
+                .Where(s => s.Id == saleId
+                    && s.SeasonId == seasonId
+                    && s.QualityGrade == qualityGrade
+                    && s.VoidedAt == null)
+                .Select(s => (decimal?)s.Quantity)
+                .SingleOrDefaultAsync(ct) ?? 0m;
         }
-
-        var totalSold = await salesQuery.SumAsync(s => (decimal?)s.Quantity, ct) ?? 0m;
-
-        var totalAdjusted = await db.ProduceStockAdjustments
-            .AsNoTracking()
-            .Where(a => a.SeasonId == seasonId && a.QualityGrade == qualityGrade && a.VoidedAt == null)
-            .SumAsync(a => (decimal?)a.Quantity, ct) ?? 0m;
-
-        var available = totalHarvested - totalSold - totalAdjusted;
 
         // BR-SAL-01, BR-HAR-02: chỉ kiểm tra đúng cặp (mùa vụ, loại chất lượng), không bù trừ giữa các loại.
         if (quantity > available)

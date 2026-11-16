@@ -53,6 +53,13 @@ public sealed class HarvestRecordQueryValidator : AbstractValidator<HarvestRecor
         RuleFor(q => q.To)
             .Must((query, to) => query.From is null || to is null || query.From <= to)
             .WithMessage("Ngày kết thúc không được trước ngày bắt đầu.");
+        When(q => q.ForSaleLink == true, () =>
+        {
+            RuleFor(q => q.SeasonId)
+                .NotNull().WithMessage("Chế độ liên kết giao dịch bán yêu cầu chọn mùa vụ.");
+            RuleFor(q => q.QualityGrade)
+                .NotNull().WithMessage("Chế độ liên kết giao dịch bán yêu cầu chọn loại chất lượng.");
+        });
     }
 }
 

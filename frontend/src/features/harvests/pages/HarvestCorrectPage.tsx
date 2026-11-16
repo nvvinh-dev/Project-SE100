@@ -66,7 +66,7 @@ export function HarvestCorrectPage() {
     }
     try {
       await correctHarvest.mutateAsync(toCorrectHarvestRequest(pendingCorrection.values, reason, harvest.data.version));
-      showSuccess("Đã đính chính phiếu thu hoạch.");
+      showSuccess("Đã điều chỉnh phiếu thu hoạch.");
       setPendingCorrection(null);
       void navigate(backTo, { replace: true });
     } catch (error) {
@@ -93,7 +93,7 @@ export function HarvestCorrectPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Đính chính phiếu thu hoạch" backTo={backTo} />
+      <PageHeader title="Điều chỉnh phiếu thu hoạch" backTo={backTo} />
       <HarvestForm
         key={`${id}:${formKey}`}
         mode="correct"
@@ -106,15 +106,15 @@ export function HarvestCorrectPage() {
         onSubmit={handleSubmit}
         pending={correctHarvest.isPending}
         backTo={backTo}
-        submitLabel="Đính chính phiếu thu"
+        submitLabel="Lưu điều chỉnh"
         notice={conflict !== null && <ErrorAlert error={conflict} onRetry={() => void reload()} retryLabel="Tải lại" />}
       />
       <ReasonDialog
         open={pendingCorrection !== null}
         onOpenChange={(open) => !open && setPendingCorrection(null)}
-        title="Đính chính phiếu thu hoạch"
+        title="Điều chỉnh phiếu thu hoạch"
         description="Giá trị cũ và mới sẽ được lưu vào nhật ký kèm lý do."
-        confirmLabel="Xác nhận đính chính"
+        confirmLabel="Xác nhận điều chỉnh"
         onConfirm={(reason) => void confirm(reason)}
         pending={correctHarvest.isPending}
         error={dialogError}

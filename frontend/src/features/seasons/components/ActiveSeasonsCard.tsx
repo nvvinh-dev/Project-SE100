@@ -5,8 +5,7 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { QuantityText } from "@/components/common/QuantityText";
 import { buttonVariants } from "@/components/ui/button";
 import { useSeasons } from "@/features/seasons/queries";
-
-const deviationFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1, signDisplay: "exceptZero" });
+import { computeYieldProgressPercent, formatYieldDeviation } from "@/features/seasons/utils";
 
 /** Thẻ "Mùa vụ đang canh tác" cho trang Hôm nay (FR-HAR-02), sẵn sàng ghép ở CHUNG-02. */
 export function ActiveSeasonsCard() {
@@ -49,10 +48,7 @@ export function ActiveSeasonsCard() {
       ) : (
         <ul className="divide-y">
           {items.map((season) => {
-            const progressPercent =
-              season.targetYield > 0
-                ? Math.min(100, Math.round((season.harvestedYield / season.targetYield) * 100))
-                : 0;
+            const progressPercent = computeYieldProgressPercent(season.harvestedYield, season.targetYield);
 
             return (
               <li key={season.id}>
@@ -76,7 +72,7 @@ export function ActiveSeasonsCard() {
                       <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> /{" "}
                       <QuantityText value={season.targetYield} unit={season.yieldUnit} />
                       {season.harvestedYield > 0 && season.targetYield > 0 && (
-                        <span className="ml-1">({deviationFormat.format(season.yieldDeviation)}%)</span>
+                        <span className="ml-1">({formatYieldDeviation(season.yieldDeviation)})</span>
                       )}
                     </span>
                   </div>

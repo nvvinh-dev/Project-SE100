@@ -87,7 +87,7 @@ export function HarvestDetailPage() {
                 <DropdownMenuItem asChild className="min-h-11">
                   <Link to={`/harvests/${data.id}/correct`}>
                     <PencilIcon />
-                    Đính chính phiếu thu
+                    Điều chỉnh phiếu
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

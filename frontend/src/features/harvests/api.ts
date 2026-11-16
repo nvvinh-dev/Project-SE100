@@ -14,7 +14,7 @@ export interface HarvestRecordPage {
 }
 
 export async function getHarvests(query: HarvestRecordQuery): Promise<HarvestRecordPage> {
-  const response = await apiClient.get<ResponseEnvelope<HarvestRecordListItem[]>>("/harvests", { params: query });
+  const response = await apiClient.get<ResponseEnvelope<HarvestRecordListItem[]>>("/harvest-records", { params: query });
   const meta = response.data.meta ?? {
     page: 1,
     pageSize: response.data.data.length,
@@ -24,21 +24,24 @@ export async function getHarvests(query: HarvestRecordQuery): Promise<HarvestRec
 }
 
 export async function getHarvest(id: string): Promise<HarvestRecordResponse> {
-  const response = await apiClient.get<ResponseEnvelope<HarvestRecordResponse>>(`/harvests/${id}`);
+  const response = await apiClient.get<ResponseEnvelope<HarvestRecordResponse>>(`/harvest-records/${id}`);
   return response.data.data;
 }
 
 export async function createHarvest(request: CreateHarvestRecordRequest): Promise<HarvestRecordResponse> {
-  const response = await apiClient.post<ResponseEnvelope<HarvestRecordResponse>>("/harvests", request);
+  const response = await apiClient.post<ResponseEnvelope<HarvestRecordResponse>>("/harvest-records", request);
   return response.data.data;
 }
 
 export async function correctHarvest(id: string, request: CorrectHarvestRecordRequest): Promise<HarvestRecordResponse> {
-  const response = await apiClient.post<ResponseEnvelope<HarvestRecordResponse>>(`/harvests/${id}/correct`, request);
+  const response = await apiClient.post<ResponseEnvelope<HarvestRecordResponse>>(
+    `/harvest-records/${id}/correct`,
+    request,
+  );
   return response.data.data;
 }
 
 export async function voidHarvest(id: string, request: VoidHarvestRecordRequest): Promise<HarvestRecordResponse> {
-  const response = await apiClient.post<ResponseEnvelope<HarvestRecordResponse>>(`/harvests/${id}/void`, request);
+  const response = await apiClient.post<ResponseEnvelope<HarvestRecordResponse>>(`/harvest-records/${id}/void`, request);
   return response.data.data;
 }

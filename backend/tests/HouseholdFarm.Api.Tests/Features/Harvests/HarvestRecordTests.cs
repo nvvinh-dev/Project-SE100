@@ -13,7 +13,7 @@ namespace HouseholdFarm.Api.Tests.Features.Harvests;
 /// <summary>Kiểm thử phiếu thu hoạch: tạo, danh sách, chi tiết, đính chính và hủy (FR-HAR-01, FR-HAR-03, FR-HAR-04).</summary>
 public class HarvestRecordTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private const string HarvestsPath = "/api/harvests";
+    private const string HarvestsPath = "/api/harvest-records";
 
     [Fact(DisplayName = "FR-HAR-01: Chủ hộ và thành viên trong phân công tạo phiếu thu hoạch hợp lệ, có AuditLog")]
     public async Task Create_OwnerAndAssignedMember_SucceedsAndLogsAudit()
@@ -150,7 +150,7 @@ public class HarvestRecordTests(ApiFactory factory) : IClassFixture<ApiFactory>
             .AssertProblemAsync(HttpStatusCode.NotFound, ErrorCodes.NotFound, ct);
     }
 
-    [Fact(DisplayName = "FR-HAR-04: danh sách lọc đúng; TV+TC ngoài phân công xem được danh sách & chi tiết với canModify = false")]
+    [Fact(DisplayName = "FR-HAR-04: danh sách lọc đúng; TV+TC ngoài phân công chỉ xem được khi forSaleLink=true (chưa hủy), không xem được chi tiết")]
     public async Task GetListAndDetail_FiltersAndFinanceScope_WorkCorrectly()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -159,7 +159,7 @@ public class HarvestRecordTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var season2 = await TestData.CreateSeasonAsync(factory.Postgres, household, plot2, SeasonStatus.InProgress, ct);
 
         var h1 = await CreateHarvestInDbAsync(household, season.Id, QualityGrade.Grade1, 300m, ct, date: new DateOnly(2026, 10, 5), note: "Đợt đầu");
-        var h2 = await CreateHarvestInDbAsync(household, season2.Id, QualityGrade.Grade2, 150m, ct, date: new DateOnly(2026, 10, 12), note: "Đợt hai");
+        await CreateHarvestInDbAsync(household, season2.Id, QualityGrade.Grade2, 150m, ct, date: new DateOnly(2026, 10, 12), note: "Đợt hai");
         var hVoid = await CreateHarvestInDbAsync(household, season.Id, QualityGrade.Grade1, 50m, ct, voided: true);
 
         // TV thường ngoài phân công -> thấy 0
@@ -167,18 +167,28 @@ public class HarvestRecordTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, plainMemberRes.StatusCode);
         Assert.Empty((await plainMemberRes.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray());
 
-        // TV+TC ngoài phân công -> xem được cả 2 phiếu chưa hủy, detail có canModify = false
+        // TV+TC ngoài phân công không truyền forSaleLink -> không thấy phiếu ngoài phân công, xem chi tiết bị NOT_FOUND
         var financeClient = factory.CreateClientFor(household.MemberWithAllPermissions);
         var finListRes = await financeClient.GetAsync(HarvestsPath, ct);
         Assert.Equal(HttpStatusCode.OK, finListRes.StatusCode);
-        var finIds = (await finListRes.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
-        Assert.Contains(h1.Id, finIds);
-        Assert.Contains(h2.Id, finIds);
-        Assert.DoesNotContain(hVoid.Id, finIds);
+        Assert.Empty((await finListRes.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray());
 
         var finDetailRes = await financeClient.GetAsync($"{HarvestsPath}/{h1.Id}", ct);
-        Assert.Equal(HttpStatusCode.OK, finDetailRes.StatusCode);
-        Assert.False((await finDetailRes.ReadJsonAsync(ct)).GetProperty("data").GetProperty("canModify").GetBoolean());
+        Assert.Equal(HttpStatusCode.NotFound, finDetailRes.StatusCode);
+
+        // Chế độ forSaleLink=true thiếu seasonId hoặc qualityGrade -> VALIDATION_ERROR
+        var missingFilterRes = await financeClient.GetAsync($"{HarvestsPath}?forSaleLink=true&seasonId={season.Id}", ct);
+        await missingFilterRes.AssertProblemAsync(HttpStatusCode.BadRequest, ErrorCodes.ValidationError, ct);
+
+        // TV+TC dùng forSaleLink=true với đủ seasonId & qualityGrade -> chỉ thấy phiếu chưa hủy (bỏ qua includeVoided=true)
+        var linkRes = await financeClient.GetAsync(
+            $"{HarvestsPath}?forSaleLink=true&seasonId={season.Id}&qualityGrade=Grade1&includeVoided=true",
+            ct);
+        Assert.Equal(HttpStatusCode.OK, linkRes.StatusCode);
+        var linkIds = (await linkRes.ReadJsonAsync(ct)).GetProperty("data").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
+        Assert.Single(linkIds);
+        Assert.Contains(h1.Id, linkIds);
+        Assert.DoesNotContain(hVoid.Id, linkIds);
 
         // Chủ hộ lọc theo seasonId + qualityGrade + from/to + includeVoided
         var ownerClient = factory.CreateClientFor(household.Owner);
@@ -265,12 +275,14 @@ public class HarvestRecordTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await voidRes.AssertProblemAsync(HttpStatusCode.UnprocessableEntity, ErrorCodes.ProduceStockNegative, ct);
         await AuditLogAssertions.AssertNoneAsync(factory.Postgres, harvest.Id, ct);
 
-        // Nhưng đính chính từ 1000 -> 800 vẫn còn 100 tồn >= 0 => thành công
+        // Nhưng điều chỉnh từ 1000 -> 800 vẫn còn 100 tồn >= 0 => thành công
         var validReduce = await client.PostAsJsonAsync(
             $"{HarvestsPath}/{harvest.Id}/correct",
             NewCorrectBody(version, quantity: 800m, reason: "Trừ tạp chất"),
             ct);
         Assert.Equal(HttpStatusCode.OK, validReduce.StatusCode);
+
+        // Ghi chú FR-SAL-03: bổ sung test kiểm tra tự gỡ liên kết bán khi đổi QualityGrade sau khi SaleHarvestLinkService hoàn thiện ở FR-SAL-03.
     }
 
     [Fact(DisplayName = "BR-HAR-04 & BR-GEN-09: hủy phiếu thu hoạch thành công ghi nhật ký; hủy hoặc sửa lần nữa trả ALREADY_VOIDED")]

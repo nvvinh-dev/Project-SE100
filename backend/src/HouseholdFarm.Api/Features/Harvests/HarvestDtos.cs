@@ -85,6 +85,9 @@ public sealed record HarvestRecordQuery : PageQuery
 
     /// <summary><c>true</c>: gồm cả phiếu thu hoạch đã hủy.</summary>
     public bool? IncludeVoided { get; init; }
+
+    /// <summary><c>true</c>: chế độ chọn phiếu liên kết giao dịch bán (BR-USR-13, bắt buộc kèm SeasonId và QualityGrade, chỉ trả phiếu chưa hủy).</summary>
+    public bool? ForSaleLink { get; init; }
 }
 
 /// <summary>

@@ -39,6 +39,7 @@ import {
 import { FarmTaskListSection } from "@/features/farm-tasks/components/FarmTaskListSection";
 import { HarvestListSection } from "@/features/harvests/components/HarvestListSection";
 import { SeasonNotesTab } from "@/features/seasons/components/SeasonNotesTab";
+import { formatYieldDeviation } from "@/features/seasons/utils";
 import {
   useCancelSeason,
   useCloseSeason,
@@ -269,8 +270,7 @@ export function SeasonDetailPage() {
               Đã thu: <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> ({progressPercent}%)
               {season.harvestedYield > 0 && season.targetYield > 0 && (
                 <span className="ml-1 text-muted-foreground">
-                  (Chênh lệch {season.yieldDeviation > 0 ? "+" : ""}
-                  {season.yieldDeviation}%)
+                  (Chênh lệch {formatYieldDeviation(season.yieldDeviation)})
                 </span>
               )}
             </span>

@@ -6,9 +6,9 @@ namespace HouseholdFarm.Api.Features.Harvests;
 
 // Phiếu thu hoạch không có PUT, DELETE: ghi nhầm thì đính chính hoặc hủy, có lý do và lưu lịch sử (FR-HAR-03).
 [ApiController]
-[Route("api/harvests")]
+[Route("api/harvest-records")]
 [Authorize]
-public sealed class HarvestsController(IHarvestService harvestService) : ControllerBase
+public sealed class HarvestRecordsController(IHarvestService harvestService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<HarvestRecordListItem>>> GetListAsync(
