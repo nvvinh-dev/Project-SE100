@@ -17,6 +17,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { usePlots } from "@/features/plots/queries";
 import { useSeasons } from "@/features/seasons/queries";
 import type { SeasonQuery } from "@/features/seasons/types";
+import { computeYieldProgressPercent, formatYieldDeviation } from "@/features/seasons/utils";
 import { ACCESS, canAccess } from "@/lib/auth/access";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { seasonStatusLabels } from "@/lib/enum-labels";
@@ -247,8 +248,22 @@ export function SeasonListPage() {
                 <div>
                   <DateText value={season.startDate} /> → <DateText value={season.expectedHarvestDate} />
                 </div>
-                <div>
-                  0 / <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                <div className="flex flex-col gap-1">
+                  <div>
+                    <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> /{" "}
+                    <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                    {season.harvestedYield > 0 && season.targetYield > 0 && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        ({formatYieldDeviation(season.yieldDeviation)})
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                    <div
+                      className="h-full bg-emerald-600"
+                      style={{ width: `${computeYieldProgressPercent(season.harvestedYield, season.targetYield)}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -269,9 +284,23 @@ export function SeasonListPage() {
               {
                 header: "Sản lượng",
                 cell: (season) => (
-                  <span>
-                    0 / <QuantityText value={season.targetYield} unit={season.yieldUnit} />
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span>
+                      <QuantityText value={season.harvestedYield} unit={season.yieldUnit} /> /{" "}
+                      <QuantityText value={season.targetYield} unit={season.yieldUnit} />
+                      {season.harvestedYield > 0 && season.targetYield > 0 && (
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          ({formatYieldDeviation(season.yieldDeviation)})
+                        </span>
+                      )}
+                    </span>
+                    <div className="h-1.5 w-32 overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full bg-emerald-600"
+                        style={{ width: `${computeYieldProgressPercent(season.harvestedYield, season.targetYield)}%` }}
+                      />
+                    </div>
+                  </div>
                 ),
                 className: "text-right",
               },

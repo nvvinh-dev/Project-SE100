@@ -12,6 +12,7 @@ import { expenseRoutes } from "@/features/expenses/routes";
 import { householdRoutes } from "@/features/households/routes";
 import { cropRoutes } from "@/features/crops/routes";
 import { farmTaskRoutes } from "@/features/farm-tasks/routes";
+import { harvestRoutes } from "@/features/harvests/routes";
 import { plotRoutes } from "@/features/plots/routes";
 import { reportRoutes } from "@/features/reports/routes";
 import { salesRoutes } from "@/features/sales/routes";
@@ -46,6 +47,7 @@ const routes: RouteObject[] = [
           ...adminRoutes,
           ...seasonRoutes,
           ...farmTaskRoutes,
+          ...harvestRoutes,
           ...supplyRoutes,
           ...expenseRoutes,
           ...salesRoutes,
