@@ -10,7 +10,7 @@ using static HouseholdFarm.Api.Tests.Features.Sales.SaleTestData;
 namespace HouseholdFarm.Api.Tests.Features.Sales;
 
 /// <summary>Ghi, hủy thanh toán (FR-SAL-04, BR-SAL-06, BR-SAL-07).</summary>
-public class PaymentTests(SalesApiFactory factory) : IClassFixture<SalesApiFactory>
+public class PaymentTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private const string PaymentsPath = "/api/payments";
 

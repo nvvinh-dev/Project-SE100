@@ -5,10 +5,16 @@ import { MorePage } from "@/app/pages/MorePage";
 import { NotFoundPage } from "@/app/pages/NotFoundPage";
 import { TodayPage } from "@/app/pages/TodayPage";
 import { mergeRouteHandles, type RouteHandle } from "@/app/route-handle";
+import { adminRoutes } from "@/features/admin/routes";
+import { auditLogRoutes } from "@/features/audit-logs/routes";
 import { accountRoutes, authRoutes } from "@/features/auth/routes";
 import { expenseRoutes } from "@/features/expenses/routes";
+import { householdRoutes } from "@/features/households/routes";
 import { cropRoutes } from "@/features/crops/routes";
+import { farmTaskRoutes } from "@/features/farm-tasks/routes";
+import { harvestRoutes } from "@/features/harvests/routes";
 import { plotRoutes } from "@/features/plots/routes";
+import { reportRoutes } from "@/features/reports/routes";
 import { salesRoutes } from "@/features/sales/routes";
 import { seasonRoutes } from "@/features/seasons/routes";
 import { supplyRoutes } from "@/features/supplies/routes";
@@ -36,10 +42,16 @@ const routes: RouteObject[] = [
           ...accountRoutes,
           ...plotRoutes,
           ...cropRoutes,
+          ...householdRoutes,
+          ...auditLogRoutes,
+          ...adminRoutes,
           ...seasonRoutes,
+          ...farmTaskRoutes,
+          ...harvestRoutes,
           ...supplyRoutes,
           ...expenseRoutes,
           ...salesRoutes,
+          ...reportRoutes,
           { path: "*", element: <NotFoundPage /> },
         ],
       },

@@ -103,7 +103,7 @@ describe("formatWeekdayDate", () => {
     expect(formatWeekdayDate(new Date("2026-09-26T03:00:00Z"))).toBe("Thứ Bảy, 26/09/2026");
   });
 
-  it("23 giờ UTC đã là ngày hôm sau ở Việt Nam", () => {
+  it("18:30 UTC đã là ngày hôm sau ở Việt Nam", () => {
     expect(formatWeekdayDate(new Date("2026-09-26T18:30:00Z"))).toBe("Chủ Nhật, 27/09/2026");
   });
 });

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { CustomerSelect } from "@/features/sales/components/CustomerSelect";
+import { HarvestLinkPicker } from "@/features/sales/components/HarvestLinkPicker";
 import { RequiredMark } from "@/features/sales/components/RequiredMark";
 import { useProduceStock } from "@/features/sales/queries";
 import { previewRevenue, type SaleFormOutput, saleFormSchema, type SaleFormValues } from "@/features/sales/schemas";
@@ -291,6 +292,25 @@ export function SaleForm({
                 <RequiredMark />
               </FieldLabel>
               <Input {...field} id="sale-date" type="date" required aria-invalid={fieldState.invalid} />
+              <FieldError errors={[fieldState.error]} />
+            </Field>
+          )}
+        />
+
+        <Controller
+          name="harvestRecordIds"
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor="sale-harvest-links">Liên kết phiếu thu (không bắt buộc)</FieldLabel>
+              <HarvestLinkPicker
+                id="sale-harvest-links"
+                seasonId={seasonId}
+                qualityGrade={qualityGrades.find((grade) => grade === qualityGrade) ?? ""}
+                value={field.value}
+                onChange={field.onChange}
+                invalid={fieldState.invalid}
+              />
               <FieldError errors={[fieldState.error]} />
             </Field>
           )}

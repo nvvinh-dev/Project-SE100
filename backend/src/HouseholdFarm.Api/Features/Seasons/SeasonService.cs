@@ -63,20 +63,73 @@ public sealed class SeasonService(
                 || EF.Functions.ILike(s.Crop.Name, pattern, SearchPatterns.EscapeCharacter));
         }
 
-        return await Sort(seasons, query.Sort)
+        var paged = await Sort(seasons, query.Sort)
             .ThenBy(s => s.Id)
-            .Select(s => new SeasonListItem(
+            .Select(s => new
+            {
                 s.Id,
                 s.PlotId,
-                s.Plot.Code,
+                PlotCode = s.Plot.Code,
                 s.CropId,
-                s.Crop.Name,
+                CropName = s.Crop.Name,
                 s.Crop.YieldUnit,
                 s.StartDate,
                 s.ExpectedHarvestDate,
                 s.TargetYield,
-                s.Status))
+                s.Status,
+            })
             .ToPagedResultAsync(query, ct);
+
+        if (paged.Items.Count == 0)
+        {
+            return new PagedResult<SeasonListItem>([], paged.Page, paged.PageSize, paged.TotalCount);
+        }
+
+        var seasonIds = paged.Items.Select(x => x.Id).ToList();
+
+        // Tổng hợp sản lượng thu hoạch (FR-HAR-02) và tiến độ công việc theo lô để tránh truy vấn N+1.
+        var harvestTotals = await db.HarvestRecords
+            .AsNoTracking()
+            .Where(h => seasonIds.Contains(h.SeasonId) && h.VoidedAt == null)
+            .GroupBy(h => h.SeasonId)
+            .Select(g => new { SeasonId = g.Key, Total = g.Sum(h => h.Quantity) })
+            .ToDictionaryAsync(x => x.SeasonId, x => x.Total, ct);
+
+        var taskStats = await db.FarmTasks
+            .AsNoTracking()
+            .Where(t => seasonIds.Contains(t.SeasonId) && t.Status != FarmTaskStatus.Cancelled)
+            .GroupBy(t => t.SeasonId)
+            .Select(g => new
+            {
+                SeasonId = g.Key,
+                Total = g.Count(),
+                Completed = g.Count(t => t.Status == FarmTaskStatus.Done),
+            })
+            .ToDictionaryAsync(x => x.SeasonId, ct);
+
+        var items = paged.Items.Select(s =>
+        {
+            var harvested = harvestTotals.GetValueOrDefault(s.Id, 0m);
+            var deviation = ComputeYieldDeviation(harvested, s.TargetYield);
+            taskStats.TryGetValue(s.Id, out var stats);
+            return new SeasonListItem(
+                s.Id,
+                s.PlotId,
+                s.PlotCode,
+                s.CropId,
+                s.CropName,
+                s.YieldUnit,
+                s.StartDate,
+                s.ExpectedHarvestDate,
+                s.TargetYield,
+                s.Status,
+                harvested,
+                deviation,
+                stats?.Completed ?? 0,
+                stats?.Total ?? 0);
+        }).ToList();
+
+        return new PagedResult<SeasonListItem>(items, paged.Page, paged.PageSize, paged.TotalCount);
     }
 
     public async Task<IReadOnlyList<SeasonOptionItem>> GetOptionsAsync(SeasonOptionQuery query, CancellationToken ct)
@@ -472,42 +525,24 @@ public sealed class SeasonService(
                 .Where(h => h.SeasonId == id && h.VoidedAt == null)
                 .SumAsync(h => (decimal?)h.Quantity, ct) ?? 0m;
 
-            try
-            {
-                var stocks = await produceStockService.GetStockAsync(id, ct);
-                produceStocks = stocks.Select(p => new ProduceStockSummaryItem(
-                    p.QualityGrade,
-                    p.Quantity,
-                    season.Crop.YieldUnit)).ToList();
-            }
-            catch (NotImplementedException)
-            {
-                produceStocks = [
-                    new(QualityGrade.Grade1, 0, season.Crop.YieldUnit),
-                    new(QualityGrade.Grade2, 0, season.Crop.YieldUnit),
-                    new(QualityGrade.Grade3, 0, season.Crop.YieldUnit),
-                ];
-            }
+            var stocks = await produceStockService.GetStockAsync(id, ct);
+            produceStocks = stocks.Select(p => new ProduceStockSummaryItem(
+                p.QualityGrade,
+                p.Quantity,
+                season.Crop.YieldUnit)).ToList();
         }
 
         // BR-USR-13: Tóm tắt tài chính dành cho Chủ hộ hoặc người có quyền ManageFinance (không tự tính, lấy qua ISeasonFinanceService)
         if (isOwner || currentUser.CanManageFinance)
         {
-            try
+            var financeSummaries = await seasonFinanceService.GetAsync([id], ct);
+            var finance = financeSummaries.FirstOrDefault(f => f.SeasonId == id);
+            if (finance is not null)
             {
-                var financeSummaries = await seasonFinanceService.GetAsync([id], ct);
-                var finance = financeSummaries.FirstOrDefault(f => f.SeasonId == id);
-                if (finance is not null)
-                {
-                    financialSummary = new SeasonFinancialSummary(
-                        finance.SupplyCost + finance.ExpenseAmount,
-                        finance.Revenue,
-                        finance.Profit);
-                }
-            }
-            catch (NotImplementedException)
-            {
-                // Khi RPT-FIN chưa hiện thực thì giữ financialSummary = null
+                financialSummary = new SeasonFinancialSummary(
+                    finance.SupplyCost + finance.ExpenseAmount,
+                    finance.Revenue,
+                    finance.Profit);
             }
         }
 
@@ -522,6 +557,7 @@ public sealed class SeasonService(
         var canClose = !isOutOfScope && (isOwner || currentUser.CanCloseSeason) && season.Status == SeasonStatus.InProgress;
         var canCancel = !isOutOfScope && isOwner && season.Status is SeasonStatus.Planned or SeasonStatus.InProgress;
         var canReopen = !isOutOfScope && isOwner && season.Status == SeasonStatus.Closed;
+        var yieldDeviation = ComputeYieldDeviation(harvestedYield, targetYield);
 
         return new SeasonDetailResponse(
             season.Id,
@@ -540,6 +576,7 @@ public sealed class SeasonService(
             cancelReason,
             season.Version,
             harvestedYield,
+            yieldDeviation,
             completedTasksCount,
             totalTasksCount,
             produceStocks,
@@ -552,6 +589,11 @@ public sealed class SeasonService(
             canCancel,
             canReopen);
     }
+
+    private static decimal ComputeYieldDeviation(decimal harvestedYield, decimal targetYield) =>
+        targetYield > 0m
+            ? Math.Round((harvestedYield - targetYield) / targetYield * 100m, 1, MidpointRounding.AwayFromZero)
+            : 0m;
 
     public async Task<SeasonResponse> StartAsync(Guid id, CancellationToken ct)
     {

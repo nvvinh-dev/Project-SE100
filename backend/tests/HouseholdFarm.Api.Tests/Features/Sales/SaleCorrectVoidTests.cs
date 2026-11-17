@@ -12,7 +12,7 @@ using static HouseholdFarm.Api.Tests.Features.Sales.SaleTestData;
 namespace HouseholdFarm.Api.Tests.Features.Sales;
 
 /// <summary>Điều chỉnh, hủy giao dịch bán (FR-SAL-05, BR-SAL-03, BR-SAL-04; liên kết phiếu thu FR-SAL-03).</summary>
-public class SaleCorrectVoidTests(SalesApiFactory factory) : IClassFixture<SalesApiFactory>
+public class SaleCorrectVoidTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private static object Correct(
         uint version,

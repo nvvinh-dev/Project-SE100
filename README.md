@@ -54,6 +54,57 @@ dotnet user-secrets set "Jwt:SigningKey" "<chuỗi ngẫu nhiên tối thiểu 3
 dotnet user-secrets set "Ai:ApiKey" "<khóa API Gemini>"
 ```
 
+## Database: migration và dữ liệu mẫu
+
+Chạy ở thư mục `backend/`, sau khi database Docker đã chạy và đã khai báo bí mật:
+
+```bash
+dotnet tool restore
+dotnet ef database update --project src/HouseholdFarm.Api
+dotnet run --project src/HouseholdFarm.Api -- --seed
+```
+
+- `dotnet ef database update` đưa database lên migration mới nhất. Chạy lại mỗi khi pull code có migration mới.
+- `-- --seed` tạo dữ liệu mẫu rồi thoát (không mở máy chủ). Lệnh **chỉ tạo khi database chưa có hộ nào**, chạy lại không nhân đôi dữ liệu.
+- Muốn tạo lại dữ liệu mẫu từ đầu: xóa database rồi chạy lại hai lệnh trên.
+- Database không ở máy mình (database demo): tài khoản Quản trị hệ thống **không** dùng mật khẩu mẫu. Trước khi chạy `--seed`, khai báo
+  mật khẩu riêng (tối thiểu 8 ký tự, có chữ cái và chữ số); thiếu thì lệnh dừng, không tạo gì:
+
+```bash
+cd src/HouseholdFarm.Api
+dotnet user-secrets set "Seed:AdminPassword" "<mật khẩu Quản trị riêng>"
+```
+
+```bash
+dotnet ef database drop --project src/HouseholdFarm.Api
+```
+
+- Tạo migration mới (tên dạng `<Module>_<MoTa>`):
+
+```bash
+dotnet ef migrations add <Module>_<MoTa> --project src/HouseholdFarm.Api
+```
+
+### Tài khoản mẫu
+
+Mọi tài khoản mẫu dùng chung mật khẩu `MatKhauMau@2026`. Mật khẩu này **chỉ dùng cho dữ liệu mẫu**, không dùng cho tài khoản thật.
+Riêng tài khoản Quản trị hệ thống chỉ dùng mật khẩu này trên database ở máy mình; database demo dùng mật khẩu khai báo ở `Seed:AdminPassword`.
+Tên, số điện thoại đều là giả.
+
+| Số điện thoại | Tài khoản | Hộ |
+|---|---|---|
+| `0900000001` | Quản trị hệ thống (mật khẩu mẫu chỉ trên máy mình) | (không thuộc hộ) |
+| `0900000010` | Chủ hộ | Hộ mẫu A |
+| `0900000011` | Thành viên hộ, đủ ba quyền bổ sung (kho, tài chính, chốt mùa vụ) | Hộ mẫu A |
+| `0900000012` | Thành viên hộ, không có quyền bổ sung | Hộ mẫu A |
+| `0900000013` | Nhân công | Hộ mẫu A |
+| `0900000020` | Chủ hộ | Hộ mẫu B |
+| `0900000021` | Thành viên hộ, đủ ba quyền bổ sung | Hộ mẫu B |
+| `0900000022` | Thành viên hộ, không có quyền bổ sung | Hộ mẫu B |
+| `0900000023` | Nhân công | Hộ mẫu B |
+
+Hộ A có thửa `TD001`, `TD002` đang sử dụng và `TD003` ngừng sử dụng; hộ B có thửa `TD001`.
+
 ## Build, test, chạy backend
 
 ```bash

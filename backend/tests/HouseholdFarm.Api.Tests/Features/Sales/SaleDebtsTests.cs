@@ -7,7 +7,7 @@ using static HouseholdFarm.Api.Tests.Features.Sales.SaleTestData;
 namespace HouseholdFarm.Api.Tests.Features.Sales;
 
 /// <summary>Công nợ bán hàng chưa thu (FR-SAL-07).</summary>
-public class SaleDebtsTests(SalesApiFactory factory) : IClassFixture<SalesApiFactory>
+public class SaleDebtsTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private const string DebtsPath = "/api/sales/debts";
 
