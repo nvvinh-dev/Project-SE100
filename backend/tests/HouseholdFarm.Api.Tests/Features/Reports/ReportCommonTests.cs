@@ -311,13 +311,67 @@ public class ReportCommonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await using (var ownerScope = CreateExportScope(household.Owner))
         {
             var unsupported = await Assert.ThrowsAsync<AppException>(() =>
-                ownerScope.Service.ExportAsync(ReportType.Production, ExportFormat.Pdf, filter, filter, document, ct));
+                ownerScope.Service.ExportAsync(ReportType.Production, (ExportFormat)999, filter, filter, document, ct));
             Assert.Equal(ErrorCodes.ValidationError, unsupported.Code);
         }
 
         await using var verifyDb = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
         Assert.Empty(await verifyDb.ReportExports.Where(r => r.HouseholdId == household.Household.Id).ToListAsync(ct));
         Assert.Empty(await verifyDb.AuditLogs.Where(a => a.HouseholdId == household.Household.Id && a.Action == AuditActions.ReportExport).ToListAsync(ct));
+    }
+
+    [Fact(DisplayName = "FR-RPT-05, FR-RPT-06: xuất PDF trả tệp PDF hợp lệ có tiếng Việt, lưu report_exports và nhật ký")]
+    public async Task Export_Pdf_ReturnsValidPdfAndRecordsExport()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var household = await factory.CreateHouseholdAsync(ct);
+        var filter = new ReportFilter
+        {
+            From = new DateOnly(2026, 10, 1),
+            To = new DateOnly(2026, 10, 31),
+        };
+        var document = new ReportExportDocument(
+            Title: "Báo cáo sản xuất",
+            FileNamePrefix: "bao-cao-san-xuat",
+            FiltersSummary: [new("Từ ngày", "01/10/2026"), new("Đến ngày", "31/10/2026")],
+            OverviewItems: [new("Tổng diện tích", "1.500 m²")],
+            Sections:
+            [
+                new(
+                    Title: "Danh sách mùa vụ",
+                    Columns:
+                    [
+                        new("Mùa vụ", ReportColumnType.Text),
+                        new("Doanh thu", ReportColumnType.Money),
+                        new("Độ lệch", ReportColumnType.Percent),
+                    ],
+                    Rows:
+                    [
+                        ["Lúa OM5451 · TD001", 12_500_000m, 5.0m],
+                    ],
+                    FooterNote: "Số liệu kiểm tra tiếng Việt có dấu."),
+            ]);
+
+        await using var scope = CreateExportScope(household.Owner);
+        var result = await scope.Service.ExportAsync(
+            ReportType.Production,
+            ExportFormat.Pdf,
+            filter,
+            filter,
+            document,
+            ct);
+
+        Assert.Equal("application/pdf", result.ContentType);
+        Assert.Equal("bao-cao-san-xuat-20261113-171530.pdf", result.FileName);
+        Assert.True(result.Content.Length > 100);
+        Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(result.Content, 0, 5));
+
+        await using var verifyDb = factory.Postgres.CreateDbContext(TestCurrentUser.For(household.Owner));
+        var exportRow = await verifyDb.ReportExports.SingleAsync(r => r.HouseholdId == household.Household.Id, ct);
+        Assert.Equal(ExportFormat.Pdf, exportRow.Format);
+        Assert.Equal(ReportType.Production, exportRow.ReportType);
+        await AuditLogAssertions.AssertSingleAsync(
+            factory.Postgres, household.Household.Id, AuditActions.ReportExport, exportRow.Id, ct);
     }
 
     private async Task<Season> CreateCustomSeasonAsync(
@@ -359,7 +413,16 @@ public class ReportCommonTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var jsonOptions = factory.Services.GetRequiredService<IOptions<JsonOptions>>();
         var audit = new AuditLogger(db, currentUser, clock, jsonOptions);
         var access = new ReportAccessService(currentUser);
-        var service = new ReportExportService(db, currentUser, clock, config, audit, access, new ExcelReportWriter(), jsonOptions);
+        var service = new ReportExportService(
+            db,
+            currentUser,
+            clock,
+            config,
+            audit,
+            access,
+            new ExcelReportWriter(),
+            new PdfReportWriter(),
+            jsonOptions);
         return new ReportExportScope(db, service);
     }
 

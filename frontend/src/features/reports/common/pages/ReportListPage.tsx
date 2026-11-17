@@ -20,7 +20,7 @@ const reportCards = [
     description: "Sản lượng thực tế, độ lệch mục tiêu, năng suất và so với mùa trước.",
     icon: SproutIcon,
     access: ACCESS.household,
-    available: false,
+    available: true,
   },
   {
     type: "FarmTask" as const,
@@ -28,7 +28,7 @@ const reportCards = [
     description: "Thống kê công việc đã lập, hoàn thành, trễ hạn để điều phối công việc.",
     icon: ClipboardCheckIcon,
     access: ACCESS.household,
-    available: false,
+    available: true,
   },
   {
     type: "Supply" as const,

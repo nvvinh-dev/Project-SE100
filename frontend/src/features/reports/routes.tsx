@@ -1,7 +1,9 @@
 import type { RouteObject } from "react-router";
 import type { RouteHandle } from "@/app/route-handle";
 import { ReportListPage } from "@/features/reports/common/pages/ReportListPage";
+import { FarmTaskReportPage } from "@/features/reports/farm-tasks/pages/FarmTaskReportPage";
 import { FinanceReportPage } from "@/features/reports/finance/pages/FinanceReportPage";
+import { ProductionReportPage } from "@/features/reports/production/pages/ProductionReportPage";
 import { ACCESS } from "@/lib/auth/access";
 
 /**
@@ -9,6 +11,16 @@ import { ACCESS } from "@/lib/auth/access";
  */
 export const reportRoutes: RouteObject[] = [
   { path: "/reports", element: <ReportListPage />, handle: { access: ACCESS.household } satisfies RouteHandle },
+  {
+    path: "/reports/production",
+    element: <ProductionReportPage />,
+    handle: { access: ACCESS.household } satisfies RouteHandle,
+  },
+  {
+    path: "/reports/farm-tasks",
+    element: <FarmTaskReportPage />,
+    handle: { access: ACCESS.household } satisfies RouteHandle,
+  },
   {
     path: "/reports/finance",
     element: <FinanceReportPage />,

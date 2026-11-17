@@ -21,12 +21,17 @@ using HouseholdFarm.Api.Features.Harvests;
 using HouseholdFarm.Api.Features.Households;
 using HouseholdFarm.Api.Features.Plots;
 using HouseholdFarm.Api.Features.Reports.Common;
+using HouseholdFarm.Api.Features.Reports.FarmTasks;
 using HouseholdFarm.Api.Features.Reports.Finance;
+using HouseholdFarm.Api.Features.Reports.Production;
 using HouseholdFarm.Api.Features.Sales;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Features.Supplies;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Infrastructure;
 using Serilog;
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -119,7 +124,11 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<ISaleService, SaleService>();
 builder.Services.AddScoped<IReportAccessService, ReportAccessService>();
 builder.Services.AddSingleton<ExcelReportWriter>();
+builder.Services.AddSingleton<PdfReportWriter>();
 builder.Services.AddScoped<IReportExportService, ReportExportService>();
+builder.Services.AddScoped<IPreviousSeasonService, PreviousSeasonService>();
+builder.Services.AddScoped<IProductionReportService, ProductionReportService>();
+builder.Services.AddScoped<IFarmTaskReportService, FarmTaskReportService>();
 
 builder.Services.AddScoped<DevDataSeeder>();
 
