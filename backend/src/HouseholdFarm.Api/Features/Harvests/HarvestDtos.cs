@@ -107,3 +107,70 @@ public record ProduceStockResponse(
     decimal TotalSold,
     decimal TotalAdjusted,
     decimal Quantity);
+
+/// <summary>Tham số lọc danh sách tồn nông sản (FR-HAR-06).</summary>
+public sealed record ProduceStockOverviewQuery
+{
+    public Guid? SeasonId { get; init; }
+
+    public QualityGrade? QualityGrade { get; init; }
+}
+
+/// <summary>Một dòng tồn nông sản theo mùa vụ và loại chất lượng (FR-HAR-06).</summary>
+public sealed record ProduceStockOverviewItem(
+    Guid SeasonId,
+    string CropName,
+    string PlotCode,
+    DateOnly SeasonStartDate,
+    SeasonStatus SeasonStatus,
+    Unit YieldUnit,
+    QualityGrade QualityGrade,
+    decimal TotalHarvested,
+    decimal TotalSold,
+    decimal TotalAdjusted,
+    decimal Quantity);
+
+/// <summary>Chủ hộ điều chỉnh giảm tồn nông sản, bắt buộc chọn lý do (FR-HAR-07, BR-HAR-05).</summary>
+/// <param name="RequestId">Sinh một lần khi mở form, chống tạo trùng khi gửi lại (BR-GEN-10).</param>
+public sealed record CreateProduceStockAdjustmentRequest(
+    Guid RequestId,
+    Guid SeasonId,
+    QualityGrade? QualityGrade,
+    decimal Quantity,
+    DateOnly? AdjustmentDate,
+    ProduceAdjustmentReason? Reason,
+    string? ReasonOther,
+    string? Note);
+
+/// <summary>Hủy phiếu điều chỉnh tồn nông sản (FR-HAR-07, BR-HAR-05, BR-GEN-06).</summary>
+public sealed record VoidProduceStockAdjustmentRequest(string Reason);
+
+/// <summary>Thông tin một lần điều chỉnh tồn nông sản (FR-HAR-07).</summary>
+public sealed record ProduceStockAdjustmentResponse(
+    Guid Id,
+    Guid SeasonId,
+    string CropName,
+    string PlotCode,
+    DateOnly SeasonStartDate,
+    SeasonStatus SeasonStatus,
+    Unit YieldUnit,
+    QualityGrade QualityGrade,
+    decimal Quantity,
+    DateOnly AdjustmentDate,
+    ProduceAdjustmentReason Reason,
+    string? ReasonOther,
+    string? Note,
+    DateTime? VoidedAt,
+    string? VoidReason,
+    DateTime CreatedAt);
+
+/// <summary>Tham số lọc lịch sử điều chỉnh tồn nông sản (FR-HAR-07).</summary>
+public sealed record ProduceStockAdjustmentQuery : PageQuery
+{
+    public Guid? SeasonId { get; init; }
+
+    public QualityGrade? QualityGrade { get; init; }
+
+    /// <summary>Mặc định gồm cả bản ghi đã hủy để đối chiếu lịch sử điều chỉnh.</summary>
+    public bool? IncludeVoided { get; init; }
+}

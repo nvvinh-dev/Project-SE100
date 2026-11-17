@@ -135,4 +135,12 @@ public interface IProduceStockService
         QualityGrade qualityGrade,
         IReadOnlyCollection<Guid> harvestRecordIds,
         CancellationToken ct);
+
+    /// <summary>
+    /// Lấy danh sách tồn nông sản tổng hợp kèm thông tin mùa vụ (FR-HAR-06).
+    /// Khi không truyền <c>SeasonId</c>, chỉ trả các dòng có tồn khác 0; khi chọn một mùa vụ, trả đủ 3 loại chất lượng.
+    /// </summary>
+    Task<IReadOnlyList<ProduceStockOverviewItem>> GetOverviewAsync(
+        ProduceStockOverviewQuery query,
+        CancellationToken ct);
 }

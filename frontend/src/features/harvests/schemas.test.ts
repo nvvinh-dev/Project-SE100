@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   emptyHarvestFormValues,
+  emptyProduceStockAdjustmentFormValues,
   harvestFormSchema,
   harvestToFormValues,
+  produceStockAdjustmentFormSchema,
   toCorrectHarvestRequest,
   toCreateHarvestRequest,
+  toCreateProduceStockAdjustmentRequest,
 } from "@/features/harvests/schemas";
 import type { HarvestRecordResponse } from "@/features/harvests/types";
 import { todayInVietnam } from "@/features/supplies/schemas";
@@ -114,6 +117,50 @@ describe("harvest request mappers", () => {
       qualityGrade: "Grade1",
       quantity: "120,5",
       note: "",
+    });
+  });
+});
+
+describe("produceStockAdjustmentFormSchema", () => {
+  it("chấp nhận điều chỉnh giảm hợp lệ và yêu cầu reasonOther khi chọn Other", () => {
+    const valid = produceStockAdjustmentFormSchema.safeParse({
+      seasonId: "s-1",
+      qualityGrade: "Grade1",
+      quantity: "300",
+      adjustmentDate: todayInVietnam(),
+      reason: "HouseholdUse",
+      reasonOther: "",
+      note: "  Dùng ăn  ",
+    });
+    expect(valid.success).toBe(true);
+
+    const missingOther = produceStockAdjustmentFormSchema.safeParse({
+      ...emptyProduceStockAdjustmentFormValues({ seasonId: "s-1", qualityGrade: "Grade2" }),
+      quantity: "12,5",
+      reason: "Other",
+      reasonOther: "   ",
+    });
+    expect(missingOther.success).toBe(false);
+
+    const validOther = produceStockAdjustmentFormSchema.parse({
+      seasonId: "s-1",
+      qualityGrade: "Grade2",
+      quantity: "12,5",
+      adjustmentDate: "2026-10-15",
+      reason: "Other",
+      reasonOther: "  Cho hàng xóm  ",
+      note: "",
+    });
+
+    expect(toCreateProduceStockAdjustmentRequest(validOther, "req-adj-1")).toEqual({
+      requestId: "req-adj-1",
+      seasonId: "s-1",
+      qualityGrade: "Grade2",
+      quantity: 12.5,
+      adjustmentDate: "2026-10-15",
+      reason: "Other",
+      reasonOther: "Cho hàng xóm",
+      note: null,
     });
   });
 });
