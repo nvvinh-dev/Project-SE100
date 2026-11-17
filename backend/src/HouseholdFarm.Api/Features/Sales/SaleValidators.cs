@@ -21,6 +21,31 @@ public sealed class CreateSaleRequestValidator : AbstractValidator<CreateSaleReq
     }
 }
 
+public sealed class CorrectSaleRequestValidator : AbstractValidator<CorrectSaleRequest>
+{
+    public CorrectSaleRequestValidator(IAppClock clock)
+    {
+        // BR-SAL-03: giá trị mới phải thỏa các điều kiện dữ liệu của BR-SAL-01.
+        RuleFor(r => r.Channel).CustomerOrChannelRules(r => r.CustomerId);
+        RuleFor(r => r.ChannelOther).MaximumLength(200).WithMessage("Ghi chú kênh bán tối đa 200 ký tự.");
+        RuleFor(r => r.QualityGrade).QualityGradeRules();
+        RuleFor(r => r.Quantity).SaleQuantityRules();
+        RuleFor(r => r.UnitPrice).UnitPriceRules();
+        RuleFor(r => r.SaleDate).SaleDateRules(clock);
+        // BR-GEN-06: lý do không rỗng sau khi bỏ khoảng trắng.
+        RuleFor(r => r.Reason).NotEmpty().WithMessage("Vui lòng nhập lý do điều chỉnh.");
+    }
+}
+
+public sealed class VoidSaleRequestValidator : AbstractValidator<VoidSaleRequest>
+{
+    public VoidSaleRequestValidator()
+    {
+        // BR-GEN-06: lý do không rỗng sau khi bỏ khoảng trắng.
+        RuleFor(r => r.Reason).NotEmpty().WithMessage("Vui lòng nhập lý do hủy.");
+    }
+}
+
 public sealed class SaleQueryValidator : AbstractValidator<SaleQuery>
 {
     public SaleQueryValidator()

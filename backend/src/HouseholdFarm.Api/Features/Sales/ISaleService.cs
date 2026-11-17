@@ -24,4 +24,24 @@ public interface ISaleService
     /// <c>INSUFFICIENT_PRODUCE_STOCK</c>.
     /// </summary>
     Task<SaleResponse> CreateAsync(CreateSaleRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Điều chỉnh giao dịch bán (BR-SAL-03): kiểm tra tồn sau khi hoàn lại lượng của chính giao dịch này, doanh thu mới
+    /// không nhỏ hơn số đã thu, danh sách phiếu thu gửi lên thay toàn bộ liên kết cũ.
+    /// Lỗi: <c>FORBIDDEN</c>, <c>NOT_FOUND</c>, <c>VALIDATION_ERROR</c>, <c>ALREADY_VOIDED</c>, <c>CATALOG_INACTIVE</c>,
+    /// <c>SEASON_INVALID_STATE</c>, <c>INSUFFICIENT_PRODUCE_STOCK</c>, <c>REVENUE_BELOW_PAID</c>, <c>CONCURRENCY_CONFLICT</c>.
+    /// </summary>
+    Task<SaleResponse> CorrectAsync(Guid id, CorrectSaleRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Hủy giao dịch bán khi mọi thanh toán của nó đã hủy (BR-SAL-04). Lỗi: <c>FORBIDDEN</c>, <c>NOT_FOUND</c>,
+    /// <c>ALREADY_VOIDED</c>, <c>SEASON_INVALID_STATE</c>, <c>SALE_HAS_PAYMENTS</c>.
+    /// </summary>
+    Task<SaleResponse> VoidAsync(Guid id, VoidSaleRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Công nợ bán hàng chưa thu (FR-SAL-07): giao dịch chưa hủy còn nợ, nợ lâu nhất trước, kèm tổng số và tổng tiền.
+    /// Lỗi: <c>FORBIDDEN</c>.
+    /// </summary>
+    Task<SaleDebtsResponse> GetDebtsAsync(CancellationToken ct);
 }

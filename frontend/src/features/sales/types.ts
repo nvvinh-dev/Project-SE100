@@ -68,6 +68,8 @@ export interface SaleResponse {
   outstandingAmount: number;
   paymentStatus: PaymentStatus;
   harvestLinks: SaleHarvestLinkItem[];
+  /** Gồm cả thanh toán đã hủy (lịch sử); đã thu chỉ tính thanh toán chưa hủy. */
+  payments: PaymentResponse[];
   voidedAt: string | null;
   voidReason: string | null;
   createdAt: string;
@@ -124,4 +126,55 @@ export interface ProduceStockResponse {
   seasonId: string;
   qualityGrade: QualityGrade;
   quantity: number;
+}
+
+/** Điều chỉnh giao dịch bán (BR-SAL-03): không đổi mùa vụ; `harvestRecordIds` thay toàn bộ liên kết cũ. */
+export interface CorrectSaleRequest {
+  customerId: string | null;
+  channel: SalesChannel | null;
+  channelOther: string | null;
+  qualityGrade: QualityGrade;
+  quantity: number;
+  unitPrice: number;
+  saleDate: string;
+  note: string | null;
+  harvestRecordIds: string[];
+  reason: string;
+  version: number;
+}
+
+export interface VoidSaleRequest {
+  reason: string;
+}
+
+// Trùng tên DTO backend (Features/Sales/PaymentDtos.cs).
+
+export interface PaymentResponse {
+  id: string;
+  saleId: string;
+  amount: number;
+  paymentDate: string;
+  note: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  createdAt: string;
+}
+
+export interface CreatePaymentRequest {
+  requestId: string;
+  saleId: string;
+  amount: number;
+  paymentDate: string;
+  note: string | null;
+}
+
+export interface VoidPaymentRequest {
+  reason: string;
+}
+
+/** Công nợ bán hàng chưa thu (FR-SAL-07). */
+export interface SaleDebtsResponse {
+  totalCount: number;
+  totalOutstanding: number;
+  items: SaleListItem[];
 }

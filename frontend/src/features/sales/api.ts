@@ -1,14 +1,20 @@
 import type {
+  CorrectSaleRequest,
   CreateCustomerRequest,
+  CreatePaymentRequest,
   CreateSaleRequest,
   CustomerListItem,
   CustomerQuery,
   CustomerResponse,
+  PaymentResponse,
   ProduceStockResponse,
+  SaleDebtsResponse,
   SaleListItem,
   SaleQuery,
   SaleResponse,
   UpdateCustomerRequest,
+  VoidPaymentRequest,
+  VoidSaleRequest,
 } from "@/features/sales/types";
 import type { HarvestRecordListItem } from "@/features/harvests/types";
 import { apiClient, type PageMeta, type ResponseEnvelope } from "@/lib/api-client";
@@ -63,6 +69,31 @@ export async function createSale(request: CreateSaleRequest): Promise<SaleRespon
 /** Tồn nông sản của mùa vụ (API của module thu hoạch); trả mọi loại chất lượng, trang tự chọn loại cần. */
 export async function getProduceStock(seasonId: string): Promise<ProduceStockResponse[]> {
   const response = await apiClient.get<ResponseEnvelope<ProduceStockResponse[]>>("/produce-stock", { params: { seasonId } });
+  return response.data.data;
+}
+
+export async function correctSale(id: string, request: CorrectSaleRequest): Promise<SaleResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SaleResponse>>(`/sales/${id}/correct`, request);
+  return response.data.data;
+}
+
+export async function voidSale(id: string, request: VoidSaleRequest): Promise<SaleResponse> {
+  const response = await apiClient.post<ResponseEnvelope<SaleResponse>>(`/sales/${id}/void`, request);
+  return response.data.data;
+}
+
+export async function getSaleDebts(): Promise<SaleDebtsResponse> {
+  const response = await apiClient.get<ResponseEnvelope<SaleDebtsResponse>>("/sales/debts");
+  return response.data.data;
+}
+
+export async function createPayment(request: CreatePaymentRequest): Promise<PaymentResponse> {
+  const response = await apiClient.post<ResponseEnvelope<PaymentResponse>>("/payments", request);
+  return response.data.data;
+}
+
+export async function voidPayment(id: string, request: VoidPaymentRequest): Promise<PaymentResponse> {
+  const response = await apiClient.post<ResponseEnvelope<PaymentResponse>>(`/payments/${id}/void`, request);
   return response.data.data;
 }
 
