@@ -7,7 +7,6 @@ import {
   getCustomer,
   getCustomers,
   getHarvestsForSaleLink,
-  getProduceStock,
   getSale,
   getSaleDebts,
   getSales,
@@ -23,7 +22,8 @@ import type {
   VoidPaymentRequest,
   VoidSaleRequest,
 } from "@/features/sales/types";
-import { harvestKeys } from "@/features/harvests/queries";
+// Tồn nông sản thuộc module thu hoạch: bán hàng làm tồn đổi nên làm mới theo key của module đó.
+import { harvestKeys, produceStockKeys } from "@/features/harvests/queries";
 import { seasonKeys } from "@/features/seasons/queries";
 import type { QualityGrade } from "@/lib/enums";
 
@@ -38,12 +38,6 @@ export const saleKeys = {
   list: (query: SaleQuery) => [...saleKeys.all, "list", query] as const,
   detail: (id: string) => [...saleKeys.all, "detail", id] as const,
   debts: () => [...saleKeys.all, "debts"] as const,
-};
-
-/** Tồn nông sản đọc từ API của module thu hoạch; bán hàng làm tồn giảm nên làm mới key này sau khi lưu. */
-export const produceStockKeys = {
-  all: ["produce-stock"] as const,
-  season: (seasonId: string) => [...produceStockKeys.all, "season", seasonId] as const,
 };
 
 export function useCustomers(query: CustomerQuery, options: { enabled?: boolean } = {}) {
@@ -90,14 +84,6 @@ export function useSales(query: SaleQuery) {
 
 export function useSale(id: string) {
   return useQuery({ queryKey: saleKeys.detail(id), queryFn: () => getSale(id) });
-}
-
-export function useProduceStock(seasonId: string) {
-  return useQuery({
-    queryKey: produceStockKeys.season(seasonId),
-    queryFn: () => getProduceStock(seasonId),
-    enabled: seasonId !== "",
-  });
 }
 
 /** Bán hàng, thanh toán đổi doanh thu, công nợ (trang bán hàng, công nợ), tồn nông sản và phần tài chính của mùa vụ. */

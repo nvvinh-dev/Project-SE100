@@ -14,8 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { CustomerSelect } from "@/features/sales/components/CustomerSelect";
 import { HarvestLinkPicker } from "@/features/sales/components/HarvestLinkPicker";
 import { RequiredMark } from "@/features/sales/components/RequiredMark";
-import { useProduceStock } from "@/features/sales/queries";
 import { previewRevenue, type SaleFormOutput, saleFormSchema, type SaleFormValues } from "@/features/sales/schemas";
+import { useProduceStockOverview } from "@/features/harvests/queries";
 import { SeasonSelect } from "@/features/seasons/components/SeasonSelect";
 import { qualityGradeLabels, salesChannelLabels, unitLabels } from "@/lib/enum-labels";
 import { qualityGrades, salesChannels, type Unit } from "@/lib/enums";
@@ -71,7 +71,8 @@ export function SaleForm({
   const quantityText = useWatch({ control: form.control, name: "quantity" });
   const unitPriceText = useWatch({ control: form.control, name: "unitPrice" });
 
-  const stock = useProduceStock(seasonId);
+  // FR-HAR-06: có seasonId thì API trả đủ 3 loại chất lượng; TV+TC xem được tồn mọi mùa vụ (BR-USR-13).
+  const stock = useProduceStockOverview({ seasonId }, seasonId !== "");
   const available = availableStock(stock.data, seasonId, qualityGrade, stockCredit);
   const quantity = parseDecimalInput(quantityText.trim());
   const exceedsStock = available !== undefined && quantity !== null && quantity > available;

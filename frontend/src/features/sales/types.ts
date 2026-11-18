@@ -121,13 +121,6 @@ export interface CreateSaleRequest {
   harvestRecordIds: string[];
 }
 
-/** Tồn nông sản của một mùa vụ theo loại chất lượng, lấy từ API của module thu hoạch. */
-export interface ProduceStockResponse {
-  seasonId: string;
-  qualityGrade: QualityGrade;
-  quantity: number;
-}
-
 /** Điều chỉnh giao dịch bán (BR-SAL-03): không đổi mùa vụ; `harvestRecordIds` thay toàn bộ liên kết cũ. */
 export interface CorrectSaleRequest {
   customerId: string | null;
