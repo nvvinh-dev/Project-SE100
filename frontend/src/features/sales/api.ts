@@ -7,7 +7,6 @@ import type {
   CustomerQuery,
   CustomerResponse,
   PaymentResponse,
-  ProduceStockResponse,
   SaleDebtsResponse,
   SaleListItem,
   SaleQuery,
@@ -66,11 +65,6 @@ export async function createSale(request: CreateSaleRequest): Promise<SaleRespon
   return response.data.data;
 }
 
-/** Tồn nông sản của mùa vụ (API của module thu hoạch); trả mọi loại chất lượng, trang tự chọn loại cần. */
-export async function getProduceStock(seasonId: string): Promise<ProduceStockResponse[]> {
-  const response = await apiClient.get<ResponseEnvelope<ProduceStockResponse[]>>("/produce-stock", { params: { seasonId } });
-  return response.data.data;
-}
 
 export async function correctSale(id: string, request: CorrectSaleRequest): Promise<SaleResponse> {
   const response = await apiClient.post<ResponseEnvelope<SaleResponse>>(`/sales/${id}/correct`, request);
