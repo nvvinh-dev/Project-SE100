@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PlotSeasonsSection } from "@/features/plots/components/PlotSeasonsSection";
 import { usePlot } from "@/features/plots/queries";
 import type { PlotResponse } from "@/features/plots/types";
 import { ApiError } from "@/lib/api-error";
@@ -22,7 +23,7 @@ import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { soilTypeLabels, waterSourceLabels } from "@/lib/enum-labels";
 import { formatArea } from "@/lib/format";
 
-/** `/plots/:id`: chi tiết thửa đất (mẫu trang chi tiết). Danh sách mùa vụ trên thửa thêm ở FR-PLOT-04. */
+/** `/plots/:id`: chi tiết thửa đất (mẫu trang chi tiết) và danh sách mùa vụ trên thửa (FR-PLOT-04). */
 export function PlotDetailPage() {
   const { id = "" } = useParams();
   const plot = usePlot(id);
@@ -88,6 +89,8 @@ export function PlotDetailPage() {
           </InfoRow>
         </dl>
       </section>
+
+      <PlotSeasonsSection plotId={data.id} canCreate={canEdit} />
     </div>
   );
 }
