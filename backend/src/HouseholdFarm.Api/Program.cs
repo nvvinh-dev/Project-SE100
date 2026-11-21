@@ -24,6 +24,7 @@ using HouseholdFarm.Api.Features.Reports.Common;
 using HouseholdFarm.Api.Features.Reports.FarmTasks;
 using HouseholdFarm.Api.Features.Reports.Finance;
 using HouseholdFarm.Api.Features.Reports.Production;
+using HouseholdFarm.Api.Features.Reports.Supplies;
 using HouseholdFarm.Api.Features.Sales;
 using HouseholdFarm.Api.Features.Seasons;
 using HouseholdFarm.Api.Features.Supplies;
@@ -98,6 +99,7 @@ builder.Services.AddScoped<IStockService, StockService>();
 builder.Services.AddScoped<ISaleHarvestLinkService, SaleHarvestLinkService>();
 builder.Services.AddScoped<ISeasonFinanceService, SeasonFinanceService>();
 builder.Services.AddScoped<IFinanceReportService, FinanceReportService>();
+builder.Services.AddScoped<ISupplyReportService, SupplyReportService>();
 builder.Services.AddScoped<IProduceStockService, ProduceStockService>();
 builder.Services.AddScoped<ISeasonStateGuard, SeasonStateGuard>();
 

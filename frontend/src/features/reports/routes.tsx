@@ -4,6 +4,7 @@ import { ReportListPage } from "@/features/reports/common/pages/ReportListPage";
 import { FarmTaskReportPage } from "@/features/reports/farm-tasks/pages/FarmTaskReportPage";
 import { FinanceReportPage } from "@/features/reports/finance/pages/FinanceReportPage";
 import { ProductionReportPage } from "@/features/reports/production/pages/ProductionReportPage";
+import { SupplyReportPage } from "@/features/reports/supplies/pages/SupplyReportPage";
 import { ACCESS } from "@/lib/auth/access";
 
 /**
@@ -20,6 +21,11 @@ export const reportRoutes: RouteObject[] = [
     path: "/reports/farm-tasks",
     element: <FarmTaskReportPage />,
     handle: { access: ACCESS.household } satisfies RouteHandle,
+  },
+  {
+    path: "/reports/supplies",
+    element: <SupplyReportPage />,
+    handle: { access: ACCESS.stockManager } satisfies RouteHandle,
   },
   {
     path: "/reports/finance",
