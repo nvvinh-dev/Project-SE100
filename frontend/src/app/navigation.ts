@@ -126,7 +126,7 @@ export const moreGroups: readonly NavGroup[] = [
 
 /** Bảng ghi nhanh "＋": mỗi nút một dòng, đi thẳng tới form. */
 export const quickAddItems: readonly NavItem[] = [
-  { label: "Ghi kết quả công việc", icon: ClipboardCheckIcon, to: "/tasks?mine=true", access: ACCESS.household },
+  { label: "Ghi kết quả công việc", icon: ClipboardCheckIcon, to: "/tasks?tab=today", access: ACCESS.household },
   { label: "Thu hoạch", icon: WheatIcon, to: "/harvests/new", access: ACCESS.household },
   { label: "Bán hàng", icon: HandCoinsIcon, to: "/sales/new", access: ACCESS.financeManager },
   { label: "Nhập kho", icon: PackagePlusIcon, to: "/stock/in", access: ACCESS.stockManager },

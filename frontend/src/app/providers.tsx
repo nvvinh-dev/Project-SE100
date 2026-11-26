@@ -10,8 +10,14 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <OfflineBanner />
       <AuthProvider>{children}</AuthProvider>
-      {/* Giữa phía trên để không che thanh tab và thanh nút ở đáy màn hình điện thoại. */}
-      <Toaster position="top-center" richColors containerAriaLabel="Thông báo" />
+      {/* Giữa phía dưới để không che tiêu đề và nút chính ở đầu trang; trên điện thoại đẩy lên trên thanh tab
+          (64px) hoặc thanh nút dính đáy của form, cộng vùng an toàn của màn hình tai thỏ. */}
+      <Toaster
+        position="bottom-center"
+        mobileOffset={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        richColors
+        containerAriaLabel="Thông báo"
+      />
     </QueryClientProvider>
   );
 }

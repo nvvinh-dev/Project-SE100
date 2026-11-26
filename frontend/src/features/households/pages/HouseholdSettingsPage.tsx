@@ -26,7 +26,7 @@ export function HouseholdSettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Cài đặt hộ" />
+      <PageHeader title="Cài đặt hộ" backTo="/more" />
       {/* Dựng lại form sau mỗi lần lưu hoặc tải lại, để giá trị và version luôn là bản mới nhất. */}
       <SettingsForm key={settings.data.version} settings={settings.data} onReload={() => void settings.refetch()} />
     </div>

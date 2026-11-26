@@ -63,7 +63,7 @@ export function AppLayout() {
   return (
     <>
       {scrollRestoration}
-      <AppSidebar items={navigation.sidebarItems} groups={navigation.groups} onQuickAdd={openQuickAdd} />
+      <AppSidebar user={user} items={navigation.sidebarItems} groups={navigation.groups} onQuickAdd={openQuickAdd} />
       <div className="md:pl-60">
         <main
           className={cn(

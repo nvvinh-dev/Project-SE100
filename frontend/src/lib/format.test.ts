@@ -4,7 +4,9 @@ import {
   formatDate,
   formatDateTime,
   formatMoney,
+  formatPlotName,
   formatQuantity,
+  formatSeasonName,
   formatWeekdayDate,
   parseDecimalInput,
 } from "@/lib/format";
@@ -105,5 +107,38 @@ describe("formatWeekdayDate", () => {
 
   it("18:30 UTC đã là ngày hôm sau ở Việt Nam", () => {
     expect(formatWeekdayDate(new Date("2026-09-26T18:30:00Z"))).toBe("Chủ Nhật, 27/09/2026");
+  });
+});
+
+describe("formatPlotName", () => {
+  it.each([
+    ["TD001", "Ruộng sau nhà", "TD001 (Ruộng sau nhà)"],
+    ["TD001", "  Ruộng sau nhà  ", "TD001 (Ruộng sau nhà)"],
+    ["TD001", "", "TD001"],
+    ["TD001", "   ", "TD001"],
+    ["TD001", null, "TD001"],
+    ["TD001", undefined, "TD001"],
+  ])("(%s, %s) → %s", (code, location, expected) => {
+    expect(formatPlotName(code, location)).toBe(expected);
+  });
+});
+
+describe("formatSeasonName", () => {
+  const season = { cropName: "Lúa ST25", plotCode: "TD001", plotLocationDescription: "Ruộng sau nhà", startDate: "2026-11-01" };
+
+  it("cây trước, thửa sau, thửa kèm vị trí", () => {
+    expect(formatSeasonName(season)).toBe("Lúa ST25 · TD001 (Ruộng sau nhà)");
+  });
+
+  it("thêm ngày bắt đầu khi có withStartDate", () => {
+    expect(formatSeasonName(season, { withStartDate: true })).toBe("Lúa ST25 · TD001 (Ruộng sau nhà) · 01/11/2026");
+  });
+
+  it("thửa không có vị trí thì chỉ mã", () => {
+    expect(formatSeasonName({ cropName: "Lúa ST25", plotCode: "TD001" })).toBe("Lúa ST25 · TD001");
+  });
+
+  it("withStartDate mà không có ngày thì bỏ phần ngày", () => {
+    expect(formatSeasonName({ cropName: "Lúa ST25", plotCode: "TD001" }, { withStartDate: true })).toBe("Lúa ST25 · TD001");
   });
 });

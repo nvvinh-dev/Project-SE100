@@ -1,9 +1,12 @@
 import { NavLink } from "react-router";
 import { type NavGroup, type NavItem, quickAddButton } from "@/app/navigation";
+import { CurrentUserBlock } from "@/app/layouts/CurrentUserBlock";
 import { Button } from "@/components/ui/button";
+import type { CurrentUserResponse } from "@/lib/auth/types";
 import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
+  user: CurrentUserResponse;
   /** Các mục của thanh tab, đã bỏ ô `＋` và mục "Thêm". */
   items: readonly NavItem[];
   /** Các nhóm của trang "Thêm" hiện thẳng ra, đã bỏ nhóm rỗng. */
@@ -13,7 +16,7 @@ interface AppSidebarProps {
 }
 
 /** Menu bên trái trên máy tính (từ 768px), rộng 240px. */
-export function AppSidebar({ items, groups, onQuickAdd }: AppSidebarProps) {
+export function AppSidebar({ user, items, groups, onQuickAdd }: AppSidebarProps) {
   return (
     <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col gap-4 overflow-y-auto border-r bg-background p-4 md:flex">
       <p className="px-2 text-lg font-semibold text-primary">Sổ Tay Nhà Nông</p>
@@ -47,6 +50,8 @@ export function AppSidebar({ items, groups, onQuickAdd }: AppSidebarProps) {
           </section>
         ))}
       </nav>
+
+      <CurrentUserBlock user={user} className="mt-auto" />
     </aside>
   );
 }

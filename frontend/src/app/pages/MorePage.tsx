@@ -1,5 +1,6 @@
 import { ChevronRightIcon } from "lucide-react";
 import { Link } from "react-router";
+import { CurrentUserBlock } from "@/app/layouts/CurrentUserBlock";
 import { moreGroupsFor } from "@/app/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
@@ -14,6 +15,7 @@ export function MorePage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Thêm" />
+      <CurrentUserBlock user={user} />
       {moreGroupsFor(user).map((group) => (
         <section key={group.title} className="flex flex-col gap-2">
           <h2 className="text-sm font-medium text-muted-foreground">{group.title}</h2>

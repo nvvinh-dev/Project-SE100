@@ -84,6 +84,29 @@ export function formatDateTime(instant: string): string {
   return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
 }
 
+/** Thửa luôn kèm vị trí để người dùng nhận ra ruộng nào: `TD001 (Ruộng sau nhà)`; thửa không có vị trí thì chỉ mã. */
+export function formatPlotName(code: string, locationDescription?: string | null): string {
+  const location = locationDescription?.trim();
+  return location ? `${code} (${location})` : code;
+}
+
+export interface SeasonNameParts {
+  cropName: string;
+  plotCode: string;
+  plotLocationDescription?: string | null;
+  /** Ngày bắt đầu `yyyy-MM-dd`; cần khi có `withStartDate`. */
+  startDate?: string;
+}
+
+/**
+ * Tên mùa vụ, cây trước, thửa sau: `Lúa ST25 · TD001 (Ruộng sau nhà)`.
+ * Ô chọn mùa vụ thêm ngày bắt đầu để phân biệt các vụ cùng cây cùng thửa: `... · 01/11/2026`.
+ */
+export function formatSeasonName(season: SeasonNameParts, options: { withStartDate?: boolean } = {}): string {
+  const name = `${season.cropName} · ${formatPlotName(season.plotCode, season.plotLocationDescription)}`;
+  return options.withStartDate && season.startDate ? `${name} · ${formatDate(season.startDate)}` : name;
+}
+
 /**
  * Đọc số người dùng gõ vào ô số thập phân: nhận cả `,` và `.` làm dấu thập phân.
  * Trả `null` khi ô trống hoặc không phải số; khoảng giá trị do schema của form kiểm tra.

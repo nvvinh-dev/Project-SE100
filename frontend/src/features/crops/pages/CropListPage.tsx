@@ -70,7 +70,7 @@ export function CropListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Cây trồng" action={<PermissionGate allowed={canEdit}>{createButton}</PermissionGate>} />
+      <PageHeader title="Cây trồng" backTo="/more" action={<PermissionGate allowed={canEdit}>{createButton}</PermissionGate>} />
 
       <SearchFilterBar
         search={query.search ?? ""}

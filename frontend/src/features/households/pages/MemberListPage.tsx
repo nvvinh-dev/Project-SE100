@@ -71,7 +71,7 @@ export function MemberListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Thành viên" action={createButton} />
+      <PageHeader title="Thành viên" backTo="/more" action={createButton} />
 
       <SearchFilterBar
         search={query.search ?? ""}
