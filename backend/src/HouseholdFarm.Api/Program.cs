@@ -12,6 +12,7 @@ using HouseholdFarm.Api.Common.Validation;
 using HouseholdFarm.Api.Data;
 using HouseholdFarm.Api.Data.Seed;
 using HouseholdFarm.Api.Features.Admin;
+using HouseholdFarm.Api.Features.Ai;
 using HouseholdFarm.Api.Features.AuditLogs;
 using HouseholdFarm.Api.Features.Auth;
 using HouseholdFarm.Api.Features.Crops;
@@ -132,6 +133,13 @@ builder.Services.AddScoped<IReportExportService, ReportExportService>();
 builder.Services.AddScoped<IPreviousSeasonService, PreviousSeasonService>();
 builder.Services.AddScoped<IProductionReportService, ProductionReportService>();
 builder.Services.AddScoped<IFarmTaskReportService, FarmTaskReportService>();
+
+// Dịch vụ AI qua interface của nhóm (D-44); singleton để dùng lại một kết nối tới nhà cung cấp.
+builder.Services.Configure<AIOptions>(builder.Configuration.GetSection(AIOptions.SectionName));
+builder.Services.AddSingleton<IAIClient, GeminiAIClient>();
+builder.Services.AddScoped<IAIUsageService, AIUsageService>();
+builder.Services.AddScoped<AssistantToolbox>();
+builder.Services.AddScoped<IAIAssistantService, AIAssistantService>();
 
 builder.Services.AddScoped<DevDataSeeder>();
 
