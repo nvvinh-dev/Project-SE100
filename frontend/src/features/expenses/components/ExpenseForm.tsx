@@ -13,6 +13,7 @@ import {
   type ExpenseFormValues,
   expenseScopes,
 } from "@/features/expenses/schemas";
+import { useOnlySeasonDefault } from "@/features/sales/use-only-season-default";
 import { SeasonSelect } from "@/features/seasons/components/SeasonSelect";
 import { expenseCategoryLabels } from "@/lib/enum-labels";
 import { expenseCategories } from "@/lib/enums";
@@ -52,12 +53,19 @@ export function ExpenseForm({ mode, defaultValues, onSubmit, pending, backTo, su
   });
   const scope = useWatch({ control: form.control, name: "scope" });
   const category = useWatch({ control: form.control, name: "category" });
+  const seasonId = useWatch({ control: form.control, name: "seasonId" });
 
   // Ô chọn mùa vụ gọi lại hàm này trong effect khi nhận `?seasonId=`, nên giữ nguyên tham chiếu giữa các lần render.
   const selectSeason = useCallback(
     (seasonId: string) => form.setValue("seasonId", seasonId, { shouldDirty: true, shouldValidate: true }),
     [form],
   );
+  // Chọn sẵn không tính là người dùng đã sửa form, để "Quay lại" không hỏi bỏ thay đổi.
+  const selectOnlySeason = useCallback(
+    (option: { id: string }) => form.setValue("seasonId", option.id, { shouldValidate: true }),
+    [form],
+  );
+  useOnlySeasonDefault("ManageExpenses", seasonId, selectOnlySeason, mode === "create" && scope === "season");
 
   async function submit(values: ExpenseFormOutput) {
     setSubmitError(null);

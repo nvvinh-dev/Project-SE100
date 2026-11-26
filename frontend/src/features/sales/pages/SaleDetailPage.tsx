@@ -262,13 +262,13 @@ function PaymentsSection({
   );
 }
 
-/** Khối "Phiếu thu đã liên kết" (FR-SAL-03): ngày thu, sản lượng. */
+/** Khối "Phiếu thu hoạch đã liên kết" (FR-SAL-03): ngày thu, sản lượng. */
 function HarvestLinksSection({ sale }: { sale: SaleResponse }) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">Phiếu thu đã liên kết</h2>
+      <h2 className="text-base font-semibold">Phiếu thu hoạch đã liên kết</h2>
       {sale.harvestLinks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Không liên kết phiếu thu nào.</p>
+        <p className="text-sm text-muted-foreground">Không liên kết phiếu thu hoạch nào.</p>
       ) : (
         <ul className="flex flex-col divide-y rounded-lg border">
           {sale.harvestLinks.map((link) => (

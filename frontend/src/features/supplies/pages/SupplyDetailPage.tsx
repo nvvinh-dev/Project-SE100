@@ -66,12 +66,6 @@ export function SupplyDetailPage() {
                 {canSeePrices && (
                   <>
                     <DropdownMenuItem asChild className="min-h-11">
-                      <Link to={`/stock/in?supplyId=${data.id}`}>
-                        <PackagePlusIcon />
-                        Nhập kho
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="min-h-11">
                       <Link to={`/stock/out?supplyId=${data.id}`}>
                         <PackageMinusIcon />
                         Xuất kho
@@ -133,6 +127,15 @@ export function SupplyDetailPage() {
             {data.note ?? "—"}
           </InfoRow>
         </dl>
+        {/* Nhập kho là thao tác hay dùng nhất ở trang này nên làm nút chính; vật tư ngừng sử dụng không nhập được (BR-GEN-13). */}
+        {canSeePrices && data.status === "Active" && (
+          <Button asChild className="min-h-11 sm:self-start">
+            <Link to={`/stock/in?supplyId=${data.id}`}>
+              <PackagePlusIcon data-icon="inline-start" />
+              Nhập kho
+            </Link>
+          </Button>
+        )}
       </section>
 
       {/* Lịch sử giao dịch có đơn giá, giá trị nên chỉ Chủ hộ, TV+Kho thấy. */}

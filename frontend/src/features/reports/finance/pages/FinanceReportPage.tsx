@@ -89,7 +89,12 @@ function FinanceReportContent({ report, hasScopeFilter }: { report: FinanceRepor
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryTile label="Tổng chi phí" amount={report.totalCost} />
+        {/* Tiền mua vật tư chỉ thành chi phí khi xuất cho mùa vụ; không ghi rõ thì người dùng tưởng báo cáo thiếu tiền mua. */}
+        <SummaryTile
+          label="Tổng chi phí"
+          amount={report.totalCost}
+          note="Vật tư tính khi xuất kho; tiền mua xem ở Dòng tiền"
+        />
         <SummaryTile label="Tổng doanh thu" amount={report.totalRevenue} />
         <SummaryTile label="Lợi nhuận đã chốt" amount={report.closedProfit} note="Mùa vụ đã chốt" />
         <SummaryTile label="Lợi nhuận tạm tính" amount={report.provisionalProfit} note="Mùa vụ chưa chốt" />

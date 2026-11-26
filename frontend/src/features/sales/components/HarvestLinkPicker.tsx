@@ -15,23 +15,23 @@ interface HarvestLinkPickerProps {
 }
 
 /**
- * Ô "Liên kết phiếu thu (không bắt buộc)" (FR-SAL-03): chọn nhiều phiếu của đúng mùa vụ và loại đã chọn, chưa hủy
+ * Ô "Liên kết phiếu thu hoạch (không bắt buộc)" (FR-SAL-03): chọn nhiều phiếu của đúng mùa vụ và loại đã chọn, chưa hủy
  * (BR-SAL-05). Không ràng buộc số lượng, liên kết chỉ để tham khảo.
  */
 export function HarvestLinkPicker({ id, seasonId, qualityGrade, value, onChange, invalid = false }: HarvestLinkPickerProps) {
   const harvests = useHarvestsForSaleLink(seasonId, qualityGrade);
 
   if (!seasonId || !qualityGrade) {
-    return <p className="text-sm text-muted-foreground">Chọn mùa vụ và loại chất lượng để thấy các phiếu thu.</p>;
+    return <p className="text-sm text-muted-foreground">Chọn mùa vụ và loại chất lượng để thấy các phiếu thu hoạch.</p>;
   }
   if (harvests.isPending) {
-    return <p className="text-sm text-muted-foreground">Đang tải phiếu thu...</p>;
+    return <p className="text-sm text-muted-foreground">Đang tải phiếu thu hoạch...</p>;
   }
   if (harvests.isError) {
-    return <p className="text-sm text-destructive">Không tải được danh sách phiếu thu.</p>;
+    return <p className="text-sm text-destructive">Không tải được danh sách phiếu thu hoạch.</p>;
   }
   if (harvests.data.length === 0) {
-    return <p className="text-sm text-muted-foreground">Mùa vụ chưa có phiếu thu loại này.</p>;
+    return <p className="text-sm text-muted-foreground">Mùa vụ chưa có phiếu thu hoạch loại này.</p>;
   }
 
   function toggle(harvestRecordId: string, checked: boolean) {
@@ -54,7 +54,7 @@ export function HarvestLinkPicker({ id, seasonId, qualityGrade, value, onChange,
                 type="checkbox"
                 checked={checked}
                 onChange={(event) => toggle(harvest.id, event.target.checked)}
-                aria-label={`Phiếu thu ngày ${formatDate(harvest.harvestDate)}, ${formatQuantity(harvest.quantity, harvest.yieldUnit)}`}
+                aria-label={`Phiếu thu hoạch ngày ${formatDate(harvest.harvestDate)}, ${formatQuantity(harvest.quantity, harvest.yieldUnit)}`}
                 className="size-4 accent-primary"
               />
               <span className="flex flex-1 items-center justify-between gap-3">
