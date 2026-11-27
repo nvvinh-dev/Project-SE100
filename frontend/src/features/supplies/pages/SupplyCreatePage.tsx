@@ -13,7 +13,7 @@ export function SupplyCreatePage() {
   const handleSubmit: SupplyFormSubmit = async (values, setError) => {
     try {
       const supply = await createSupply.mutateAsync(toCreateSupplyRequest(values));
-      showSuccess(`Đã thêm vật tư ${supply.code}.`);
+      showSuccess(`Đã thêm vật tư ${supply.name}.`);
       // Thay trang form trong lịch sử: bấm quay lại từ trang chi tiết về danh sách, không mở lại form trống.
       void navigate(`/supplies/${supply.id}`, { replace: true });
     } catch (error) {

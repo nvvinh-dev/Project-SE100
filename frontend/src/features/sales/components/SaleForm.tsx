@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Controller, useForm, type UseFormSetError, useWatch } from "react-hook-form";
 import { Link } from "react-router";
 import { ErrorAlert } from "@/components/common/ErrorAlert";
@@ -15,6 +15,7 @@ import { CustomerSelect } from "@/features/sales/components/CustomerSelect";
 import { HarvestLinkPicker } from "@/features/sales/components/HarvestLinkPicker";
 import { RequiredMark } from "@/features/sales/components/RequiredMark";
 import { previewRevenue, type SaleFormOutput, saleFormSchema, type SaleFormValues } from "@/features/sales/schemas";
+import { useOnlySeasonDefault } from "@/features/sales/use-only-season-default";
 import { useProduceStockOverview } from "@/features/harvests/queries";
 import { SeasonSelect } from "@/features/seasons/components/SeasonSelect";
 import { qualityGradeLabels, salesChannelLabels, unitLabels } from "@/lib/enum-labels";
@@ -91,6 +92,24 @@ export function SaleForm({
     },
     [form],
   );
+
+  // Chọn sẵn không tính là người dùng đã sửa form, để "Quay lại" không hỏi bỏ thay đổi.
+  const selectOnlySeason = useCallback(
+    (option: { id: string; yieldUnit: Unit }) => {
+      form.setValue("seasonId", option.id, { shouldValidate: true });
+      setYieldUnit(option.yieldUnit);
+    },
+    [form],
+  );
+  useOnlySeasonDefault("ManageSales", seasonId, selectOnlySeason, mode === "create");
+
+  // Mùa vụ chỉ còn tồn đúng một loại chất lượng thì chọn sẵn loại đó.
+  const onlyGradeInStock = singleGradeInStock(stock.data);
+  useEffect(() => {
+    if (mode === "create" && qualityGrade === "" && onlyGradeInStock) {
+      form.setValue("qualityGrade", onlyGradeInStock, { shouldValidate: true });
+    }
+  }, [mode, qualityGrade, onlyGradeInStock, form]);
 
   async function submit(values: SaleFormOutput) {
     setSubmitError(null);
@@ -303,7 +322,7 @@ export function SaleForm({
           control={form.control}
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="sale-harvest-links">Liên kết phiếu thu (không bắt buộc)</FieldLabel>
+              <FieldLabel htmlFor="sale-harvest-links">Liên kết phiếu thu hoạch (không bắt buộc)</FieldLabel>
               <HarvestLinkPicker
                 id="sale-harvest-links"
                 seasonId={seasonId}
@@ -351,6 +370,12 @@ function availableStock(
   const quantity = stock.find((item) => item.qualityGrade === qualityGrade)?.quantity ?? 0;
   const sameSale = credit && credit.seasonId === seasonId && credit.qualityGrade === qualityGrade;
   return sameSale ? quantity + credit.quantity : quantity;
+}
+
+/** Loại chất lượng duy nhất còn tồn > 0 của mùa vụ; không có hoặc có từ hai loại thì trả `undefined`. */
+function singleGradeInStock(stock: { qualityGrade: string; quantity: number }[] | undefined): string | undefined {
+  const inStock = (stock ?? []).filter((item) => item.quantity > 0);
+  return inStock.length === 1 ? inStock[0].qualityGrade : undefined;
 }
 
 function exceedsMessage(available: number | undefined, unitLabel: string): string {

@@ -38,7 +38,7 @@ export function SupplyEditPage() {
     setConflict(null);
     try {
       const saved = await updateSupply.mutateAsync(toUpdateSupplyRequest(values, supply.data.version));
-      showSuccess(`Đã lưu vật tư ${saved.code}.`);
+      showSuccess(`Đã lưu vật tư ${saved.name}.`);
       void navigate(backTo, { replace: true });
     } catch (error) {
       if (error instanceof ApiError && error.code === "CONCURRENCY_CONFLICT") {

@@ -10,6 +10,7 @@ import { showSuccess, showWarnings } from "@/components/common/toast";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useOnlySeasonDefault } from "@/features/sales/use-only-season-default";
 import { SeasonSelect } from "@/features/seasons/components/SeasonSelect";
 import { SupplySelect } from "@/features/supplies/components/SupplySelect";
 import { useCreateStockTransaction, useSupply } from "@/features/supplies/queries";
@@ -49,6 +50,7 @@ export function StockOutPage() {
   });
   const supplyId = useWatch({ control: form.control, name: "supplyId" });
   const quantity = useWatch({ control: form.control, name: "quantity" });
+  const seasonId = useWatch({ control: form.control, name: "seasonId" });
   const supply = useSupply(supplyId);
   const unit = supply.data?.unit;
   const quantityValue = parseDecimalInput(quantity);
@@ -60,6 +62,12 @@ export function StockOutPage() {
     (seasonId: string) => form.setValue("seasonId", seasonId, { shouldDirty: true, shouldValidate: true }),
     [form],
   );
+  // Chọn sẵn không tính là người dùng đã sửa form, để "Quay lại" không hỏi bỏ thay đổi.
+  const selectOnlySeason = useCallback(
+    (option: { id: string }) => form.setValue("seasonId", option.id, { shouldValidate: true }),
+    [form],
+  );
+  useOnlySeasonDefault("StockOut", seasonId, selectOnlySeason);
 
   async function submit(values: StockOutFormOutput) {
     setSubmitError(null);
