@@ -36,7 +36,7 @@ export function HouseholdPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Thông tin hộ" />
+      <PageHeader title="Thông tin hộ" backTo="/more" />
       {canEdit ? (
         // Dựng lại form sau mỗi lần lưu hoặc tải lại, để giá trị và version luôn là bản mới nhất.
         <HouseholdForm key={data.version} household={data} onReload={() => void household.refetch()} />

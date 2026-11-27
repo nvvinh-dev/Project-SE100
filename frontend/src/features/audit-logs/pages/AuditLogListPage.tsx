@@ -61,7 +61,7 @@ export function AuditLogListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Nhật ký thao tác" description="Ghi lại các thao tác quan trọng của hộ. Không ai sửa, xóa được." />
+      <PageHeader title="Nhật ký thao tác" backTo="/more" description="Ghi lại các thao tác quan trọng của hộ. Không ai sửa, xóa được." />
 
       <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-4">
         <FilterField id={ids.from} label="Từ ngày">

@@ -73,7 +73,7 @@ export function PlotListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Thửa đất" action={<PermissionGate allowed={canCreate}>{createButton}</PermissionGate>} />
+      <PageHeader title="Thửa đất" backTo="/more" action={<PermissionGate allowed={canCreate}>{createButton}</PermissionGate>} />
 
       <SearchFilterBar
         search={query.search ?? ""}
