@@ -68,14 +68,26 @@ public sealed class AIAssistantService(
         }
 
         answer = answer.Trim();
-        if (answer.Length > AskAssistantRequestValidator.AnswerMaxLength)
-        {
-            answer = answer[..AskAssistantRequestValidator.AnswerMaxLength];
-        }
+        answer = Truncate(answer, AskAssistantRequestValidator.AnswerMaxLength);
 
         // BR-AI-04: tính một lượt khi dịch vụ AI đã trả kết quả, dù đã gọi nhiều công cụ.
         var quota = await usage.RecordAsync(AIFeature.Assistant, ct);
         return new AskAssistantResponse(answer, quota);
+    }
+
+    // Câu trả lời quá dài thì lùi về dấu cách gần nhất và thêm "..." để người đọc biết câu bị cắt.
+    private static string Truncate(string answer, int maxLength)
+    {
+        const string Ellipsis = "...";
+        if (answer.Length <= maxLength)
+        {
+            return answer;
+        }
+
+        var limit = maxLength - Ellipsis.Length;
+        var cut = answer.LastIndexOf(' ', limit);
+        var head = cut > 0 ? answer[..cut] : answer[..limit];
+        return head.TrimEnd() + Ellipsis;
     }
 
     // Không đưa tên hộ, số điện thoại, địa chỉ hay thông tin liên hệ vào chỉ dẫn (BR-AI-07).

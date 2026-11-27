@@ -171,7 +171,7 @@ public sealed class AssistantToolbox(
                         PageSize = MaxItems,
                     },
                     ct)),
-                "get_season_detail" => await seasons.GetDetailAsync(args.RequiredGuid("seasonId"), ct),
+                "get_season_detail" => SeasonDetailForAI.From(await seasons.GetDetailAsync(args.RequiredGuid("seasonId"), ct)),
                 "list_farm_tasks" => Page(await farmTasks.GetListAsync(
                     new FarmTaskQuery
                     {
@@ -291,6 +291,55 @@ public sealed class AssistantToolbox(
                 : null,
         };
     }
+
+    /// <summary>
+    /// Chi tiết mùa vụ gửi cho AI: bỏ số điện thoại của người được phân công (BR-AI-07), chỉ giữ họ tên và vai trò;
+    /// bỏ phiên bản và các cờ thao tác vì AI chỉ đọc.
+    /// </summary>
+    private sealed record SeasonDetailForAI(
+        Guid Id,
+        string PlotCode,
+        string CropName,
+        Unit YieldUnit,
+        DateOnly StartDate,
+        DateOnly ExpectedHarvestDate,
+        decimal TargetYield,
+        SeasonStatus Status,
+        DateTime? StartedAt,
+        DateTime? ClosedAt,
+        DateTime? CancelledAt,
+        string? CancelReason,
+        decimal HarvestedYield,
+        decimal YieldDeviation,
+        int CompletedTasksCount,
+        int TotalTasksCount,
+        IReadOnlyList<ProduceStockSummaryItem> ProduceStocks,
+        SeasonFinancialSummary? FinancialSummary,
+        IReadOnlyList<SeasonAssigneeForAI> Assignments)
+    {
+        public static SeasonDetailForAI From(SeasonDetailResponse s) => new(
+            s.Id,
+            s.PlotCode,
+            s.CropName,
+            s.YieldUnit,
+            s.StartDate,
+            s.ExpectedHarvestDate,
+            s.TargetYield,
+            s.Status,
+            s.StartedAt,
+            s.ClosedAt,
+            s.CancelledAt,
+            s.CancelReason,
+            s.HarvestedYield,
+            s.YieldDeviation,
+            s.CompletedTasksCount,
+            s.TotalTasksCount,
+            s.ProduceStocks,
+            s.FinancialSummary,
+            s.Assignments.Select(a => new SeasonAssigneeForAI(a.FullName, a.Role)).ToList());
+    }
+
+    private sealed record SeasonAssigneeForAI(string FullName, UserRole Role);
 
     private static object Page<T>(PagedResult<T> page) => new
     {

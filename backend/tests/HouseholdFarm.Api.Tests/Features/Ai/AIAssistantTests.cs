@@ -195,6 +195,46 @@ public class AIAssistantTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.DoesNotContain(household.Household.Name, instruction);
     }
 
+    [Fact(DisplayName = "BR-AI-07: chi tiết mùa vụ gửi AI có họ tên người được phân công, không có số điện thoại")]
+    public async Task Ask_SeasonDetailTool_SendsNoPhoneNumber()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (household, season) = await SaleTestData.ArrangeSeasonAsync(factory, SeasonStatus.InProgress, ct);
+        await TestData.AssignMemberAsync(factory.Postgres, household, season, household.Member, ct);
+        var ai = new FakeAIClient()
+            .ThenToolCalls(new AIToolCall("1", "get_season_detail", new JsonObject { ["seasonId"] = season.Id.ToString() }))
+            .ThenText("Mùa vụ có một người được phân công.");
+        await using var app = factory.WithFakeAI(ai);
+
+        var response = await app.ClientFor(household.Owner).PostAsJsonAsync(AssistantPath, Ask("Ai làm mùa vụ này?"), ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = Assert.Single(Assert.IsType<AIToolResultsTurn>(ai.Requests[1].Turns[^1]).Results).Output;
+        var assignee = Assert.Single(detail["assignments"]!.AsArray());
+        Assert.Equal(household.Member.FullName, assignee!["fullName"]!.GetValue<string>());
+        var output = detail.ToJsonString();
+        Assert.DoesNotContain(household.Member.PhoneNumber!, output);
+        Assert.DoesNotContain("phoneNumber", output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact(DisplayName = "FR-AI-02: câu trả lời quá dài được cắt ở dấu cách gần nhất và thêm dấu ba chấm")]
+    public async Task Ask_LongAnswer_TruncatesAtWordBoundary()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var longAnswer = string.Concat(Enumerable.Repeat("lúa ", 1500));
+        var ai = new FakeAIClient().ThenText(longAnswer);
+        await using var app = factory.WithFakeAI(ai);
+        var household = await factory.CreateHouseholdAsync(ct);
+
+        var response = await app.ClientFor(household.Owner).PostAsJsonAsync(AssistantPath, Ask("Kể dài"), ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonObject>(ct);
+        var answer = body!["data"]!["answer"]!.GetValue<string>();
+        Assert.True(answer.Length <= AskAssistantRequestValidator.AnswerMaxLength);
+        Assert.EndsWith("lúa...", answer);
+    }
+
     private static FakeAIClient RevenueQuestionScript(Guid seasonId) => new FakeAIClient()
         .ThenToolCalls(
             new AIToolCall("1", "get_season_finance", new JsonObject { ["seasonIds"] = new JsonArray(seasonId.ToString()) }),
