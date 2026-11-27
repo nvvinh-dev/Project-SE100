@@ -3,7 +3,8 @@
 
 /**
  * Chữ người dùng gõ vào ô tiền → chuỗi lưu trong form. Dấu chấm là dấu ngăn cách hàng nghìn nên bỏ đi;
- * dấu phẩy là dấu thập phân, chỉ giữ dấu đầu tiên; ký tự khác bỏ đi.
+ * dấu phẩy là dấu thập phân, chỉ giữ dấu đầu tiên; ký tự khác bỏ đi. Số 0 thừa ở đầu bỏ đi (`0009` → `9`),
+ * để chữ hiện trên ô không thành `0.009`.
  */
 export function normalizeMoneyText(text: string): string {
   let result = "";
@@ -16,7 +17,51 @@ export function normalizeMoneyText(text: string): string {
       result += char;
     }
   }
-  return result;
+  return result.replace(/^0+(?=\d)/, "");
+}
+
+export interface MoneyEdit {
+  /** Chuỗi lưu trong form sau lần gõ. */
+  value: string;
+  /** Số chữ số và dấu phẩy đứng trước con trỏ, để đặt lại con trỏ sau khi vẽ lại. */
+  caretChars: number;
+}
+
+/** Thông tin của một lần gõ, lấy từ `InputEvent`: loại thao tác và ký tự vừa gõ. */
+export interface MoneyInputEventInfo {
+  inputType?: string;
+  data?: string | null;
+}
+
+/**
+ * Một lần gõ vào ô tiền: `value` là chuỗi đang lưu trong form, `text` và `caret` là chữ, con trỏ trình duyệt đưa về.
+ * Chỉ dựa vào sự kiện gõ và giá trị trong form, không so với chữ đang hiện, vì khi gõ nhanh chữ đó có thể chưa kịp vẽ lại.
+ */
+export function resolveMoneyEdit(value: string, text: string, caret: number, event: MoneyInputEventInfo = {}): MoneyEdit {
+  let nextText = text;
+  let nextCaret = caret;
+
+  if (event.inputType === "insertText" && event.data === "." && caret > 0 && text[caret - 1] === ".") {
+    const without = text.slice(0, caret - 1) + text.slice(caret);
+    if (!normalizeMoneyText(without).includes(",")) {
+      // Bàn phím số của nhiều điện thoại chỉ có phím ".", nên dấu chấm vừa gõ được hiểu là dấu thập phân.
+      nextText = text.slice(0, caret - 1) + "," + text.slice(caret);
+    }
+  }
+
+  const deleting = event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward";
+  if (deleting && normalizeMoneyText(text) === value) {
+    // Xóa mà giá trị không đổi nghĩa là vừa xóa trúng dấu chấm ngăn cách; ô nhập sẽ trả lại chữ cũ,
+    // nên xóa luôn chữ số cạnh nó theo hướng xóa.
+    if (event.inputType === "deleteContentForward") {
+      nextText = text.slice(0, caret) + text.slice(caret + 1);
+    } else if (caret > 0) {
+      nextText = text.slice(0, caret - 1) + text.slice(caret);
+      nextCaret = caret - 1;
+    }
+  }
+
+  return { value: normalizeMoneyText(nextText), caretChars: countMoneyCharsBefore(nextText, nextCaret) };
 }
 
 /**

@@ -10,11 +10,12 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <OfflineBanner />
       <AuthProvider>{children}</AuthProvider>
-      {/* Giữa phía dưới để không che tiêu đề và nút chính ở đầu trang; trên điện thoại đẩy lên trên thanh tab
-          (64px) hoặc thanh nút dính đáy của form, cộng vùng an toàn của màn hình tai thỏ. */}
+      {/* Giữa phía dưới để không che tiêu đề và nút chính ở đầu trang. Khoảng cách tới đáy lấy từ --toast-bottom
+          (index.css) cho cả hai mốc màn hình của sonner, để không bị thanh tab che ở khoảng 600-767px. */}
       <Toaster
         position="bottom-center"
-        mobileOffset={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        offset={{ bottom: "var(--toast-bottom)" }}
+        mobileOffset={{ bottom: "var(--toast-bottom)" }}
         richColors
         containerAriaLabel="Thông báo"
       />
