@@ -6,6 +6,7 @@ import { ErrorAlert } from "@/components/common/ErrorAlert";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeader } from "@/components/common/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
+import { AskAssistantCard } from "@/features/ai/components/AskAssistantCard";
 import { TodayTasksCard } from "@/features/farm-tasks/components/TodayTasksCard";
 import { DebtsCard } from "@/features/sales/components/DebtsCard";
 import { ActiveSeasonsCard } from "@/features/seasons/components/ActiveSeasonsCard";
@@ -31,8 +32,7 @@ const blocks: readonly TodayBlock[] = [
   { key: "active-seasons", access: ACCESS.household, component: ActiveSeasonsCard },
   { key: "low-stock", access: ACCESS.household, component: LowStockCard },
   { key: "debts", access: ACCESS.financeManager, component: DebtsCard },
-  // Hỏi trợ lý: AskAssistantCard của module AI, cắm khi FR-AI-02 vào develop.
-  { key: "ask-assistant", access: ACCESS.household, component: null },
+  { key: "ask-assistant", access: ACCESS.household, component: AskAssistantCard },
 ];
 
 /** Trang "Hôm nay" (`/`) của Chủ hộ, Thành viên hộ. Nhân công, Quản trị mở `/` thì chuyển tới trang đầu của mình. */
@@ -100,8 +100,9 @@ function OwnerContent({ blocks: blockList }: { blocks: ReactNode }) {
     );
   }
 
-  // Không biết hộ mới hay cũ thì vẫn hiện các khối để Chủ hộ dùng được trang.
-  const failed = counts.find((count) => count.isError);
+  // Không biết hộ mới hay cũ thì vẫn hiện các khối để Chủ hộ dùng được trang. Lần tải lại ngầm bị lỗi mà vẫn còn
+  // số đếm của lần trước thì dùng số đó, để hộ đã có dữ liệu không thấy lại danh sách "Bắt đầu".
+  const failed = counts.find((count) => count.isError && count.data === undefined);
   if (failed) {
     return (
       <>
